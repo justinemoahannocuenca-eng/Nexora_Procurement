@@ -120,7 +120,13 @@
                   <td>{{ $p->item ?? '—' }}</td>
                   <td>₱{{ number_format($p->unit_price ?? 0, 2) }}</td>
                   <td><b>₱{{ number_format($p->amount ?? 0, 2) }}</b></td>
-                  <td>{{ ucfirst($p->priority ?? 'normal') }}</td>
+                  @php
+                    $priorityClass = strtolower($p->priority ?? 'normal');
+                    if(!in_array($priorityClass, ['urgent','high','normal','low'])) {
+                      $priorityClass = 'normal';
+                    }
+                  @endphp
+                  <td><span class="priority-pill {{ $priorityClass }}">{{ strtoupper($p->priority ?? 'NORMAL') }}</span></td>
                   <td>{{ ucfirst($p->status ?? 'pending') }}</td>
                   <td>{{ $p->order_date ?? '' }}</td>
                   <td><span class="row-actions"><button title="View">👁</button><button title="Edit">✎</button><button class="del" title="Delete">🗑</button></span></td>

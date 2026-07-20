@@ -22,8 +22,12 @@
       ]);
       const reqJson = await safeJson(reqRes);
       const delJson = await safeJson(delRes);
-      const reqs = Array.isArray(reqJson) ? reqJson : (reqJson.data || []);
-      const dels = Array.isArray(delJson) ? delJson : (delJson.data || []);
+      const reqs = Array.isArray(reqJson)
+        ? reqJson
+        : (reqJson && Array.isArray(reqJson.data) ? reqJson.data : []);
+      const dels = Array.isArray(delJson)
+        ? delJson
+        : (delJson && Array.isArray(delJson.data) ? delJson.data : []);
 
       // Build items
       const items = [];

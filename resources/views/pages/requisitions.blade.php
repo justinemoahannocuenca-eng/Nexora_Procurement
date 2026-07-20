@@ -103,11 +103,17 @@
           </thead>
           <tbody>
             @forelse($requisitions as $req)
-              <tr data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}">
+              <tr data-id="{{ $req->id ?? '' }}" data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}">
                 <td><a class="po-link">{{ $req->requisition_number }}</a></td>
                 <td>{{ $req->item }}</td>
                 <td>{{ $req->qty }}</td>
-                <td><span class="status-pill {{ strtolower(str_replace(' ', '-', $req->priority ?? 'normal')) }}">{{ $req->priority ?? 'Normal' }}</span></td>
+                @php
+                  $priorityClass = strtolower($req->priority ?? 'normal');
+                  if(!in_array($priorityClass, ['urgent','high','normal','low'])) {
+                    $priorityClass = 'normal';
+                  }
+                @endphp
+                <td><span class="priority-pill {{ $priorityClass }}">{{ strtoupper($req->priority ?? 'NORMAL') }}</span></td>
                 <td>{{ $req->department }}</td>
                 <td>{{ $req->requested_by }}</td>
                 <td><span class="status-pill {{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}">{{ $req->status ?? 'Pending' }}</span></td>

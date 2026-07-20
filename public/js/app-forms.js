@@ -29,8 +29,9 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
 
   function priorityBadge(label = 'Normal'){
     const raw = String(label || 'Normal').trim();
-    const cls = raw.toLowerCase().replace(/\s+/g, '');
-    return `<span class="status-pill ${cls}">${htmlEscape(raw)}</span>`;
+    const normalized = raw.toUpperCase();
+    const type = ['URGENT','HIGH','LOW'].includes(normalized) ? normalized.toLowerCase() : 'normal';
+    return `<span class="priority-pill ${type}">${htmlEscape(normalized)}</span>`;
   }
 
   function refreshDeliverySupplierOptions(){
@@ -182,6 +183,62 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     if(amountField) amountField.value = (qty * unitPrice).toFixed(2);
   }
 
+  function refreshDeliveryPoOptions(){
+    const modal = document.getElementById('add-delivery-modal');
+    const poField = modal?.querySelector('[name="po"]');
+    if(!poField) return;
+    const approvedRows = [...document.querySelectorAll('#po-table tbody tr')].filter(row => {
+      const status = String(row.dataset.status || textFrom(row.children[6]) || '').toLowerCase().trim();
+      return status === 'approved';
+    });
+    const currentValue = poField.value || '';
+    poField.innerHTML = '<option value="">Select PO...</option>' + approvedRows.map(row => {
+      const poNumber = htmlEscape(textFrom(row.children[0]));
+      return `<option value="${poNumber}"${poNumber === currentValue ? ' selected' : ''}>${poNumber}</option>`;
+    }).join('');
+  }
+
+  function bindDeliveryPoAutofill(modal){
+    const form = modal?.querySelector('#add-delivery-form');
+    if(!form || form.__deliveryPoBound) return;
+    form.__deliveryPoBound = true;
+    const poField = form.querySelector('[name="po"]');
+    const supplierField = form.querySelector('[name="supplier"]');
+    const itemField = form.querySelector('[name="items"]');
+    const qtyField = form.querySelector('[name="qty"]');
+    const unitPriceField = form.querySelector('[name="unit_price"]');
+    const amountField = form.querySelector('[name="amount"]');
+    const update = () => {
+      const poNumber = (poField?.value || '').trim();
+      if(!poNumber) return;
+      const poRow = findPoRowByNumber(poNumber);
+      if(!poRow) return;
+      if(supplierField){
+        supplierField.value = resolveSupplierByPO(poNumber) || '';
+      }
+      if(itemField && !itemField.value){
+        itemField.value = poRow.dataset.item || textFrom(poRow.children[2]) || '';
+      }
+      if(qtyField && (!qtyField.value || Number(qtyField.value) === 0)){
+        qtyField.value = poRow.dataset.qty || '';
+      }
+      if(unitPriceField && (!unitPriceField.value || Number(unitPriceField.value) === 0)){
+        unitPriceField.value = poRow.dataset.unitPrice || '';
+      }
+      if(amountField){
+        const qty = Number(qtyField?.value || 0);
+        const unitPrice = Number(unitPriceField?.value || 0);
+        amountField.value = qty && unitPrice ? (qty * unitPrice).toFixed(2) : amountField.value;
+      }
+    };
+    poField?.addEventListener('change', update);
+    poField?.addEventListener('input', update);
+    qtyField?.addEventListener('input', update);
+    qtyField?.addEventListener('change', update);
+    unitPriceField?.addEventListener('input', update);
+    unitPriceField?.addEventListener('change', update);
+  }
+
   function openAddModal(kind, reqData = null){
     const modal = document.getElementById(ADD_MODAL_MAP[kind]);
     if(!modal) return;
@@ -238,6 +295,8 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       const shpNum = ID_COUNTS.dr + 1;
       setModalFieldValue(modal, 'dr', `SHP-${yr}-${pad(shpNum,4)}`);
       setModalFieldValue(modal, 'delDate', todayISO());
+      refreshDeliveryPoOptions();
+      bindDeliveryPoAutofill(modal);
     } else if(kind==='invoice'){
       setModalFieldValue(modal, 'inv', `INV-${yr}-${pad(NEXT_ID.inv,3)}`);
       setModalFieldValue(modal, 'invDate', todayISO());
@@ -507,6 +566,20 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
           reqRow.dataset.status = 'processing';
           reqRow.children[6].innerHTML = statusPill('Processing');
           updateRowStatus(reqRow, 'Processing');
+          const reqId = reqRow.dataset.id;
+          if(reqId){
+            fetch(`/requisitions/${reqId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+              },
+              body: new URLSearchParams({ status: 'Processing' }).toString()
+            }).then(() => {}).catch(() => {
+              console.warn('Unable to persist requisition status update for', reqId);
+            });
+          }
         }
       }
       initRowActionButtons();
