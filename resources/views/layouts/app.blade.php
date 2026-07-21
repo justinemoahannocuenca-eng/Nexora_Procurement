@@ -23,12 +23,13 @@
 @include('partials.toast')
 
 {{-- Shared scripts, split by concern so no single file is too long --}}
-<script src="{{ asset('js/Procurement_JS/app-core.js') }}"></script>       {{-- page/notif/toast/stat helpers --}}
-<script src="{{ asset('js/Procurement_JS/app-modals.js') }}"></script>     {{-- view/edit/delete record modals --}}
-<script src="{{ asset('js/Procurement_JS/app-dashboard.js') }}"></script>  {{-- donut chart, report ranges, queue tabs --}}
-<script src="{{ asset('js/Procurement_JS/app-filters.js') }}"></script>    {{-- table search, sort, filter panels --}}
-<script src="{{ asset('js/Procurement_JS/app-deliveries.js') }}"></script> {{-- delivery tracking modal --}}
-<script src="{{ asset('js/Procurement_JS/app-forms.js') }}"></script>      {{-- add PO/Supplier/Req/Delivery/Invoice forms --}}
+<script src="{{ asset('Procurement_JS/app-core.js') }}"></script>       {{-- page/notif/toast/stat helpers --}}
+<script src="{{ asset('Procurement_JS/app-modals.js') }}"></script>     {{-- view/edit/delete record modals --}}
+<script src="{{ asset('Procurement_JS/app-dashboard.js') }}"></script>  {{-- donut chart, report ranges, queue tabs --}}
+<script src="{{ asset('Procurement_JS/app-filters.js') }}"></script>    {{-- table search, sort, filter panels --}}
+<script src="{{ asset('Procurement_JS/app-deliveries.js') }}"></script> {{-- delivery tracking modal --}}
+<script src="{{ asset('Procurement_JS/app-forms.js') }}"></script>      {{-- add PO/Supplier/Req/Delivery/Invoice forms --}}
+<script src="{{ asset('Procurement_JS/app-warehouses.js') }}"></script> {{-- warehouse dropdown for delivery log form --}}
 
 {{-- Page-specific scripts (optional) --}}
 @yield('scripts')

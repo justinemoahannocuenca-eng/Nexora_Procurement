@@ -50,10 +50,13 @@ class AppServiceProvider extends ServiceProvider
                 $requisitionCount = 0;
             }
 
+            $pendingPoCount = DB::table('purchase_orders')->where('status', 'pending')->count();
+
             $view->with([
                 'lowStockAlerts' => $alerts,
                 'lowStockAlertCount' => $alerts->count(),
                 'requisitionCount' => $requisitionCount,
+                'pendingPoCount' => $pendingPoCount,
             ]);
         });
     }

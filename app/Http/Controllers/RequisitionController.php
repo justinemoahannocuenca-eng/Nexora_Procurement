@@ -196,39 +196,59 @@ class RequisitionController extends Controller
         $requisitions = $requisitions->sortByDesc('created_at')->values();
         $requisitionRefs = $requisitions->pluck('requisition_number')->filter()->all();
 
-        $purchaseOrders = collect();
-        foreach ($this->getRequisitionConnections() as $connection) {
-            try {
-                if ($connection->getSchemaBuilder()->hasTable('purchase_orders')) {
-                    $purchaseOrders = $connection
-                        ->table('purchase_orders')
-                        ->whereIn('requisition_reference', $requisitionRefs)
-                        ->get()
-                        ->keyBy('requisition_reference');
-                    break;
-                }
-            } catch (\Exception $e) {
-                // ignore broken or unavailable external DB connections
-            }
-        }
+        // Requisition status is not stored anywhere — it's derived, on every
+        // load, from what has actually happened downstream: Pending (no PO
+        // yet) -> Processing (PO created) -> Intransit (delivery logged) ->
+        // Delivered / Completed (delivery received/closed). Previously this
+        // looked up purchase_orders on the external requisition connection
+        // (orderfullfillment/manufacturing), but POs are created in this
+        // app's own local database — that lookup always came back empty, so
+        // the sync never fired and every requisition fell back to its
+        // hardcoded 'Pending' select value on refresh, even after a PO had
+        // been created for it.
+        $purchaseOrders = DB::table('purchase_orders')
+            ->whereIn('requisition_reference', $requisitionRefs)
+            ->get()
+            ->keyBy('requisition_reference');
 
-        $requisitions = $requisitions->map(function ($req) use ($purchaseOrders) {
+        $poIds = $purchaseOrders->pluck('id')->filter()->all();
+        $latestDeliveryByPo = DB::table('deliveries')
+            ->whereIn('purchase_order_id', $poIds)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('purchase_order_id')
+            ->map(fn ($group) => $group->first());
+
+        $requisitions = $requisitions->map(function ($req) use ($purchaseOrders, $latestDeliveryByPo) {
             $ref = $req->requisition_number;
             $po = $purchaseOrders->get($ref);
 
-            if ($po) {
-                $poStatus = strtolower(trim($po->status ?? 'pending'));
-                $currentStatus = strtolower(trim($req->status ?? 'pending'));
-                if (in_array($currentStatus, ['pending', 'processing', ''], true)) {
-                    if (in_array($poStatus, ['pending', 'approved', 'processing'], true)) {
-                        $req->status = 'Processing';
-                    } elseif ($poStatus === 'completed') {
-                        $req->status = 'Completed';
-                    }
-                }
-                $req->po_number = $po->po_number;
-                $req->po_status = $po->status;
+            if (! $po) {
+                $req->status = 'Pending';
+                return $req;
             }
+
+            $req->po_number = $po->po_number;
+            $req->po_status = $po->status;
+
+            $poStatus = strtolower(trim($po->status ?? ''));
+            if (in_array($poStatus, ['rejected', 'cancelled'], true)) {
+                $req->status = ucfirst($poStatus);
+                return $req;
+            }
+
+            $delivery = $latestDeliveryByPo->get($po->id);
+            if (! $delivery) {
+                $req->status = 'Processing';
+                return $req;
+            }
+
+            $deliveryStatus = strtolower(trim($delivery->status ?? ''));
+            $req->status = match ($deliveryStatus) {
+                'delivered' => 'Delivered',
+                'completed' => 'Completed',
+                default => 'Intransit',
+            };
 
             return $req;
         });

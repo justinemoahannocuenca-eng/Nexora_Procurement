@@ -314,8 +314,14 @@
           <label>Total Amount </label>
           <input type="text " name="amount" placeholder="₱0.00">
         </div>
-        
-       
+
+        <div class="form-field full">
+          <label>Deliver To <span class="req">*</span></label>
+          <select name="deliverTo" id="delivery-warehouse-select" required>
+            <option value="">Select warehouse...</option>
+          </select>
+        </div>
+
         <div class="form-field full">
           <label>Remarks</label>
           <textarea name="remarks" placeholder="Damage report, condition, etc."></textarea>

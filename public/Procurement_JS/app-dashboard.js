@@ -189,42 +189,149 @@
     }
   }
   
-  /* ---------- Donut chart from data ---------- */
+  /* ---------- Donut chart from data (with hover highlight + tooltip) ---------- */
+  const DONUT_STATUS_COLORS = {
+    pending: '#f2994a',
+    processing: '#2f6fed',
+    approved: '#1fa971',
+    rejected: '#eb5757',
+    cancelled: '#7c88a3',
+    completed: '#14b8a6'
+  };
+
   function initDonutFromData(canvas, statusData){
     if (!canvas || !statusData || Object.keys(statusData).length === 0) return;
-    
+
     const ctx = canvas.getContext('2d');
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
-    const radius = 70;
-    const lineWidth = 22;
-    
-    const colors = {
-      pending: '#f2994a',
-      processing: '#2f6fed',
-      approved: '#1fa971',
-      rejected: '#eb5757',
-      cancelled: '#7c88a3',
-      completed: '#14b8a6'
-    };
-    
+    const radius = 78;
+    const lineWidth = 26;
+    const gap = 0.05; // radians of empty space between segments
     const total = Object.values(statusData).reduce((sum, val) => sum + val, 0);
+
+    // Precompute each slice's angle range once so hover hit-testing and
+    // redraws don't need to recompute them every mousemove.
     let startAngle = -Math.PI / 2;
-    
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    Object.entries(statusData).forEach(([status, count]) => {
+    const slices = Object.entries(statusData).map(([status, count]) => {
       const sliceAngle = (count / total) * 2 * Math.PI;
-      const endAngle = startAngle + sliceAngle;
-      
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
-      ctx.strokeStyle = colors[status] || '#ccc';
-      ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'butt';
-      ctx.stroke();
-      
-      startAngle = endAngle;
+      const slice = { status, count, pct: Math.round((count / total) * 100), startAngle, endAngle: startAngle + sliceAngle };
+      startAngle = slice.endAngle;
+      return slice;
     });
+
+    function draw(hoveredStatus){
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineCap = 'round';
+      slices.forEach(slice => {
+        const isHovered = hoveredStatus && slice.status === hoveredStatus;
+        const isDimmed = hoveredStatus && !isHovered;
+        // Shrink each slice slightly on both ends so segments read as
+        // separate rounded pills with visible gaps, instead of one
+        // continuous ring.
+        const span = slice.endAngle - slice.startAngle;
+        const inset = Math.min(gap / 2, span / 2 - 0.001);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, slice.startAngle + inset, slice.endAngle - inset);
+        ctx.strokeStyle = DONUT_STATUS_COLORS[slice.status] || '#ccc';
+        ctx.globalAlpha = isDimmed ? 0.35 : 1;
+        ctx.lineWidth = isHovered ? lineWidth + 6 : lineWidth;
+        ctx.stroke();
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function findSliceAt(status){
+      return slices.find(s => s.status === status);
+    }
+
+    const centerEl = document.getElementById('dash-donut-center');
+    const centerVal = centerEl?.querySelector('.donut-center-val');
+    const centerLabel = centerEl?.querySelector('.donut-center-label');
+    const defaultVal = centerVal ? centerVal.textContent : '';
+    const defaultLabel = centerLabel ? centerLabel.textContent : '';
+    const tooltip = document.getElementById('dash-donut-tooltip');
+    const container = canvas.closest('.donut-chart-container');
+    const legendItems = document.querySelectorAll('#dash-donut-legend .donut-legend-item');
+
+    function highlight(status){
+      draw(status);
+      legendItems.forEach(item => item.classList.toggle('active', status && item.dataset.status === status));
+      if(status){
+        const slice = findSliceAt(status);
+        if(centerVal) centerVal.textContent = slice ? slice.pct + '%' : defaultVal;
+        if(centerLabel) centerLabel.textContent = slice ? slice.status.charAt(0).toUpperCase() + slice.status.slice(1) : defaultLabel;
+      } else {
+        if(centerVal) centerVal.textContent = defaultVal;
+        if(centerLabel) centerLabel.textContent = defaultLabel;
+        if(tooltip) tooltip.classList.remove('show');
+      }
+    }
+
+    function statusAtPoint(x, y){
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if(dist < radius - lineWidth / 2 - 4 || dist > radius + lineWidth / 2 + 4) return null;
+      let angle = Math.atan2(dy, dx);
+      if(angle < -Math.PI / 2) angle += 2 * Math.PI;
+      const found = slices.find(s => angle >= s.startAngle && angle <= s.endAngle);
+      return found ? found.status : null;
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      const status = statusAtPoint(x, y);
+      if(status){
+        const slice = findSliceAt(status);
+        highlight(status);
+        if(tooltip){
+          tooltip.textContent = `${status.charAt(0).toUpperCase() + status.slice(1)}: ${slice.count} (${slice.pct}%)`;
+          tooltip.style.left = e.clientX - (container?.getBoundingClientRect().left || 0) + 'px';
+          tooltip.style.top = e.clientY - (container?.getBoundingClientRect().top || 0) + 'px';
+          tooltip.classList.add('show');
+        }
+      } else {
+        highlight(null);
+      }
+    });
+    canvas.addEventListener('mouseleave', () => highlight(null));
+
+    legendItems.forEach(item => {
+      item.addEventListener('mouseenter', () => highlight(item.dataset.status));
+      item.addEventListener('mouseleave', () => highlight(null));
+    });
+
+    draw(null);
+  }
+
+  /* ---------- Spend by Brand "View all" modal ---------- */
+  function openSpendByBrandModal(){
+    const modal = document.getElementById('spend-by-brand-modal');
+    const list = document.getElementById('spend-by-brand-modal-list');
+    if(!modal || !list) return;
+    const data = (window.dashboardData && window.dashboardData.spendByBrandAll) || [];
+    if(!data.length){
+      list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);">No spend data available.</div>';
+    } else {
+      const max = Math.max(...data.map(d => Number(d.total) || 0)) || 1;
+      list.innerHTML = data.map(item => `
+        <div class="chart-bar-item-h">
+          <div class="chart-bar-item-h-top">
+            <span class="chart-bar-label">${htmlEscape(item.brand)}</span>
+            <span class="chart-bar-value">${htmlEscape(item.formatted)}</span>
+          </div>
+          <div class="chart-bar-track">
+            <div class="chart-bar-fill" style="width:${(Number(item.total) / max) * 100}%"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+    modal.classList.add('open');
+  }
+  function closeSpendByBrandModal(){
+    document.getElementById('spend-by-brand-modal')?.classList.remove('open');
   }
 

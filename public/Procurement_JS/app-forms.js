@@ -361,6 +361,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       setModalFieldValue(modal, 'delDate', todayISO());
       refreshDeliveryPoOptions();
       bindDeliveryPoAutofill(modal);
+      if(typeof refreshDeliveryWarehouseOptions === 'function') refreshDeliveryWarehouseOptions();
     } else if(kind==='invoice'){
       setModalFieldValue(modal, 'inv', `INV-${yr}-${pad(NEXT_ID.inv,3)}`);
       setModalFieldValue(modal, 'invDate', todayISO());
@@ -547,9 +548,19 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
   }
   function confirmCancelPO(){
     if(cancelPOData && cancelPOData.row){
-      cancelPOData.row.dataset.status = 'cancelled';
-      cancelPOData.row.classList.add('cancelled-row');
-      cancelPOData.row.cells[6].innerHTML = '<span class="status-pill cancelled">Cancelled</span>';
+      const row = cancelPOData.row;
+      row.dataset.status = 'cancelled';
+      row.classList.add('cancelled-row');
+      row.cells[6].innerHTML = '<span class="status-pill cancelled">Cancelled</span>';
+      // Previously this only updated the DOM — the cancellation was never
+      // sent to the server, so refreshing the page silently reverted the PO
+      // (and any requisition derived from it) back to its old status.
+      if(typeof persistPurchaseOrderStatus === 'function'){
+        persistPurchaseOrderStatus(row, 'Cancelled').then(() => {
+          if(typeof syncRelatedRequisitionStatusForPO === 'function') syncRelatedRequisitionStatusForPO(row, 'Cancelled');
+          if(typeof pollNavCounts === 'function') pollNavCounts();
+        });
+      }
       showToast(`PO ${cancelPOData.poNum} cancelled`, 'no');
     }
     closeCancelModal();
@@ -629,31 +640,22 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       NEXT_ID.po++;
       ID_COUNTS.po++;
       if(d.reqRef){
+        // Requisition status is derived server-side from the PO/delivery
+        // chain (see RequisitionController@index), not stored — this is
+        // just an instant visual update so the row doesn't sit at
+        // "Pending" until the next full page load.
         const reqRow = findReqRowByRef(d.reqRef);
         if(reqRow){
           reqRow.dataset.po = d.po;
           reqRow.dataset.status = 'processing';
           reqRow.children[6].innerHTML = statusPill('Processing');
           updateRowStatus(reqRow, 'Processing');
-          const reqId = reqRow.dataset.id;
-          if(reqId){
-            fetch(`/requisitions/${reqId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
-              },
-              body: new URLSearchParams({ status: 'Processing' }).toString()
-            }).then(() => {}).catch(() => {
-              console.warn('Unable to persist requisition status update for', reqId);
-            });
-          }
         }
       }
       initRowActionButtons();
       updateStatusCounts();
       showToast(`Purchase Order ${d.po} created`, 'ok');
+      if(typeof pollNavCounts === 'function') pollNavCounts();
       closeAddModal('po');
     }).catch(() => {
       showToast('Unable to save purchase order right now.', 'no');
@@ -763,6 +765,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       ID_COUNTS.req++;
       initRowActionButtons();
       showToast(`Requisition ${d.rq} submitted for approval`, 'ok');
+      if(typeof pollNavCounts === 'function') pollNavCounts();
       closeAddModal('req');
     }).catch(() => {
       showToast('Unable to save requisition right now.', 'no');
@@ -793,7 +796,8 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
         qty: d.qty || '1',
         delDate: d.delDate || '',
         status: statusLabel,
-        remarks: d.remarks || ''
+        remarks: d.remarks || '',
+        deliverTo: d.deliverTo || ''
       }).toString()
     }).then(res => res.json().then(json => ({ ok: res.ok, json }))).then(({ ok, json }) => {
       if(!ok){
@@ -841,6 +845,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       initRowActionButtons();
       updateStatusCounts();
       showToast(`Delivery ${d.dr} logged`, 'ok');
+      if(typeof pollNavCounts === 'function') pollNavCounts();
       closeAddModal('delivery');
     }).catch(() => {
       showToast('Unable to save delivery right now.', 'no');

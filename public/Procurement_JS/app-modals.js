@@ -95,7 +95,7 @@
     const lookupRef = row.dataset.reqRef || textFrom(row.children[0]);
     const reqRow = findReqRowByRef(lookupRef);
     if(!reqRow) return;
-    const reqStatus = poStatus === 'Approved' ? 'Processing' : (poStatus === 'Rejected' ? 'Pending' : (poStatus === 'Completed' ? 'Completed' : poStatus));
+    const reqStatus = poStatus === 'Approved' ? 'Processing' : poStatus;
     updateRequisitionStatus(lookupRef, reqStatus);
     persistRequisitionStatus(reqRow, reqStatus);
   }

@@ -31,23 +31,30 @@
         <div class="stat-card">
           <div class="stat-label">DELIVERIES</div>
           <div class="stat-value" id="dash-stat-inv">{{ $deliveryCount }}</div>
-          <div class="stat-sub">{{ $pendingDeliveries > 0 ? $pendingDeliveries . ' pending' : 'No deliveries yet' }}</div>
+          <div class="stat-sub">{{ $pendingDeliveries > 0 ? $pendingDeliveries . ' in progress' : 'No deliveries yet' }}</div>
         </div>
       </div>
       
       <div class="dash-grid-3">
         <div class="panel">
           <h2>Spend by Brand</h2>
-          <div class="panel-sub">{{ count($spendByBrand) > 0 ? $dashboardTotalSpend . ' total' : 'No spend data' }}</div>
+          <div class="panel-sub">
+            {{ count($spendByBrand) > 0 ? $dashboardTotalSpend . ' total' : 'No spend data' }}
+            @if(count($spendByBrandAll ?? []) > 5)
+              <a href="#" class="panel-sub-action" onclick="event.preventDefault(); openSpendByBrandModal();">View all →</a>
+            @endif
+          </div>
           @if(count($spendByBrand) > 0)
-          <div class="chart-bar-list" id="chart-spend-brand">
+          <div class="chart-bar-list chart-bar-list-h" id="chart-spend-brand">
             @foreach($spendByBrand as $item)
-            <div class="chart-bar-item">
-              <div class="chart-bar-label">{{ $item->brand }}</div>
+            <div class="chart-bar-item-h">
+              <div class="chart-bar-item-h-top">
+                <span class="chart-bar-label">{{ $item->brand }}</span>
+                <span class="chart-bar-value">{{ $item->formatted_total ?? '₱' . number_format($item->total, 2) }}</span>
+              </div>
               <div class="chart-bar-track">
                 <div class="chart-bar-fill" style="width: {{ ($item->total / $spendByBrand->max('total')) * 100 }}%"></div>
               </div>
-              <div class="chart-bar-value">{{ $item->formatted_total ?? '₱' . number_format($item->total, 2) }}</div>
             </div>
             @endforeach
           </div>
@@ -60,21 +67,22 @@
 
         <div class="panel">
           <h2>PO Status Split</h2>
-          <div class="panel-sub">{{ $poCount }} total orders</div>
+          <div class="panel-sub">{{ $poCount }} total purchase orders</div>
           @if(count($poStatusBreakdown) > 0)
           <div class="donut-chart-container">
-            <canvas id="dash-donut" width="160" height="160"></canvas>
-            <div class="donut-center">
+            <canvas id="dash-donut" width="200" height="200"></canvas>
+            <div class="donut-center" id="dash-donut-center">
               <div class="donut-center-val">{{ $poCount }}</div>
-              <div class="donut-center-label">Total POs</div>
+              <div class="donut-center-label">total purchase orders</div>
             </div>
+            <div class="donut-tooltip" id="dash-donut-tooltip"></div>
           </div>
           <div class="donut-legend" id="dash-donut-legend">
             @foreach($poStatusBreakdown as $status => $count)
-            <div class="donut-legend-item">
+            <div class="donut-legend-item" data-status="{{ $status }}" data-count="{{ $count }}" data-percent="{{ $poCount > 0 ? round(($count / $poCount) * 100) : 0 }}">
               <span class="donut-legend-dot status-{{ $status }}"></span>
-              <span class="donut-legend-label">{{ ucfirst($status) }}</span>
-              <span class="donut-legend-value">{{ $count }}</span>
+              <span class="donut-legend-label" title="{{ ucfirst($status) }}">{{ ucfirst($status) }}</span>
+              <span class="donut-legend-value">{{ $poCount > 0 ? round(($count / $poCount) * 100) : 0 }}%</span>
             </div>
             @endforeach
           </div>
@@ -103,29 +111,6 @@
           @else
           <div style="padding:32px 12px; text-align:center; color:var(--text-muted);">
             No top suppliers to display.
-          </div>
-          @endif
-        </div>
-
-        <div class="panel">
-          <h2>Low Stock Alerts</h2>
-          <div class="panel-sub">From Inventory · checked hourly</div>
-          @if(count($lowStockAlerts ?? []) > 0)
-          <div class="top-supplier-list" id="dash-low-stock">
-            @foreach($lowStockAlerts as $alert)
-            <div class="top-supplier-row">
-              <span class="ts-rank" style="background:#ffebee;color:#f44336;">!</span>
-              <div class="ts-body">
-                <div class="ts-name">{{ $alert->item_name ?? 'Unknown item' }}</div>
-                <div style="font-size:11px;color:var(--text-muted);">{{ $alert->sku ?? '—' }}</div>
-              </div>
-              <div class="ts-val" style="color:#f44336;">{{ $alert->stock }} left</div>
-            </div>
-            @endforeach
-          </div>
-          @else
-          <div style="padding:32px 12px; text-align:center; color:var(--text-muted);">
-            No low stock alerts right now.
           </div>
           @endif
         </div>
@@ -198,13 +183,28 @@
       </div>
     </section>
 
+    <div class="modal-overlay" id="spend-by-brand-modal" onclick="if(event.target===this) closeSpendByBrandModal()">
+      <div class="modal-box form-modal">
+        <div class="modal-head">
+          <div>
+            <h3>Spend by Brand</h3>
+            <p style="font-size:12px;color:var(--muted);margin-top:3px;">All brands, ranked by total purchase order spend.</p>
+          </div>
+          <button class="modal-close" onclick="closeSpendByBrandModal()">✕</button>
+        </div>
+        <div class="chart-bar-list chart-bar-list-h" id="spend-by-brand-modal-list" style="padding:20px 24px 24px; max-height:60vh; overflow-y:auto;"></div>
+      </div>
+    </div>
+
     @php
     $poStatusJson = json_encode($poStatusBreakdown);
+    $spendByBrandAllJson = json_encode(($spendByBrandAll ?? collect())->map(fn($i) => ['brand' => $i->brand, 'total' => (float) $i->total, 'formatted' => $i->formatted_total])->values());
     @endphp
-    
+
     <script>
       window.dashboardData = {
-        poStatus: {!! $poStatusJson !!}
+        poStatus: {!! $poStatusJson !!},
+        spendByBrandAll: {!! $spendByBrandAllJson !!}
       };
     </script>
 @endsection

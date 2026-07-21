@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SequenceNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -22,24 +23,22 @@ class DeliveryController extends Controller
     }
 
     /**
-     * Insert the delivery, automatically regenerating the shipment_number
-     * if it collides with one that already exists (same root cause as the
-     * PO submit issue: the browser's shipment-number counter resets on
-     * every page load, so once real shipments passed it, "Log Delivery"
-     * failed silently on a duplicate shipment_number).
+     * Insert the delivery under a server-generated shipment_number
+     * (SHP-YYYY-NNNN, next free sequence for the year) so the format
+     * always stays clean instead of falling back to a collision suffix.
      */
     private function insertDelivery(array $insert): int
     {
         $attempts = 0;
-        $currentInsert = $insert;
 
         while ($attempts < 3) {
+            $currentInsert = $insert;
+            $currentInsert['shipment_number'] = SequenceNumber::generate('deliveries', 'shipment_number', 'SHP');
+
             try {
                 return DB::table('deliveries')->insertGetId($currentInsert);
             } catch (\Throwable $e) {
                 if ($this->isDuplicateKeyException($e)) {
-                    $suffix = now()->format('YmdHis') . '-' . random_int(1000, 9999);
-                    $currentInsert['shipment_number'] = $insert['shipment_number'] . '-' . $suffix;
                     $attempts++;
                     continue;
                 }
@@ -89,6 +88,7 @@ class DeliveryController extends Controller
             'delDate' => 'required|date',
             'status'  => 'required|string|max:20',
             'remarks' => 'nullable|string',
+            'deliverTo' => 'nullable|string|max:255',
         ]);
 
         $purchaseOrder = DB::table('purchase_orders')->where('po_number', $validated['po'])->first();
@@ -112,6 +112,7 @@ class DeliveryController extends Controller
             'qty_expected' => $validated['qty'] ?? null,
             'items' => $validated['items'] ?? null,
             'remarks' => $validated['remarks'] ?? null,
+            'deliver_to_warehouse' => $validated['deliverTo'] ?? null,
             'delivery_date' => $validated['delDate'],
             'estimated_arrival' => $validated['delDate'],
             'created_at' => now(),

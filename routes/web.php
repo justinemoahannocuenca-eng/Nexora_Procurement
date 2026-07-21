@@ -6,6 +6,8 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\RequisitionController;
 use App\Http\Controllers\DeliveryController;
+use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\NotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,3 +47,8 @@ Route::prefix('deliveries')->name('deliveries.')->group(function () {
     Route::put('/{delivery}', [DeliveryController::class, 'update'])->name('update');
     Route::delete('/{delivery}', [DeliveryController::class, 'destroy'])->name('destroy');
 });
+
+Route::get('/warehouses', [WarehouseController::class, 'index'])->name('warehouses.index');
+
+Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+Route::get('/nav-counts', [NotificationController::class, 'counts'])->name('nav-counts');

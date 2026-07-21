@@ -8,6 +8,28 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends Controller
 {
     /**
+     * Compact "1k / 1M / 1B" currency format used across the dashboard
+     * (Active POS spend, Spend by Brand) so large peso amounts stay
+     * short instead of wrapping the stat cards.
+     */
+    public static function formatCompactCurrency(float $amount): string
+    {
+        $abs = abs($amount);
+
+        if ($abs >= 1_000_000_000) {
+            return '₱' . rtrim(rtrim(number_format($amount / 1_000_000_000, 1), '0'), '.') . 'B';
+        }
+        if ($abs >= 1_000_000) {
+            return '₱' . rtrim(rtrim(number_format($amount / 1_000_000, 1), '0'), '.') . 'M';
+        }
+        if ($abs >= 1_000) {
+            return '₱' . rtrim(rtrim(number_format($amount / 1_000, 1), '0'), '.') . 'k';
+        }
+
+        return '₱' . number_format($amount, 2);
+    }
+
+    /**
      * Show the procurement dashboard (stat cards, category chart,
      * PO status donut, and recent deliveries preview).
      */
@@ -75,7 +97,7 @@ class DashboardController extends Controller
             ->where('brand', '!=', '')
             ->groupBy('brand')
             ->orderByDesc('total')
-            ->limit(10)
+            ->limit(25)
             ->get();
 
         $totalSpend = DB::table('purchase_orders')
@@ -97,34 +119,20 @@ class DashboardController extends Controller
             ->limit(5)
             ->get()
             ->map(function ($supplier) {
-                $supplier->formatted_total_spend = $supplier->total_spend >= 1000
-                    ? '₱' . number_format($supplier->total_spend / 1000, 1) . 'k'
-                    : '₱' . number_format($supplier->total_spend, 2);
+                $supplier->formatted_total_spend = self::formatCompactCurrency((float) $supplier->total_spend);
                 return $supplier;
             });
 
-        $totalSpendFormatted = '₱' . number_format($totalSpend, 2);
+        $totalSpendFormatted = self::formatCompactCurrency($totalSpend);
 
         $spendByBrand = $spendByBrand->map(function ($item) {
-            $item->formatted_total = $item->total >= 1000
-                ? '₱' . number_format($item->total / 1000, 1) . 'k'
-                : '₱' . number_format($item->total, 2);
+            $item->formatted_total = self::formatCompactCurrency((float) $item->total);
             return $item;
         });
 
-        // Low stock alerts — populated by `php artisan inventory:check-low-stock`
-        // (scheduled hourly). Previously nothing on the dashboard ever read
-        // this table, so there was no way to tell if the check was working.
-        $lowStockAlerts = collect();
-        try {
-            $lowStockAlerts = DB::table('low_stock_alerts')
-                ->orderBy('stock', 'asc')
-                ->orderBy('updated_at', 'desc')
-                ->limit(10)
-                ->get();
-        } catch (\Exception $e) {
-            $lowStockAlerts = collect();
-        }
+        // Top 5 shown directly in the panel; the rest is handed to the
+        // "View all" modal so the panel never has to squeeze in every brand.
+        $spendByBrandTop = $spendByBrand->take(5)->values();
 
         return view('pages.dashboard', [
             'poCount' => $poCount,
@@ -137,11 +145,11 @@ class DashboardController extends Controller
             'suppliersMap' => $suppliersMap,
             'recentDeliveries' => $recentDeliveries,
             'deliverySuppliersMap' => $deliverySuppliersMap,
-            'spendByBrand' => $spendByBrand,
+            'spendByBrand' => $spendByBrandTop,
+            'spendByBrandAll' => $spendByBrand,
             'totalSpend' => $totalSpend,
             'totalSpendFormatted' => $totalSpendFormatted,
             'topSuppliers' => $topSuppliers,
-            'lowStockAlerts' => $lowStockAlerts,
         ]);
     }
 }

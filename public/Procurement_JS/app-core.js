@@ -14,20 +14,14 @@
     if(!panel) return;
     panel.innerHTML = '<div style="padding:12px;text-align:center;color:#7b8796">Loading notifications…</div>';
     try{
-      const headers = { 'X-Requested-With': 'XMLHttpRequest' };
-      // Fetch recent requisitions
-      const [reqRes, delRes] = await Promise.all([
-        fetch('/requisitions', { headers }),
-        fetch('/deliveries', { headers })
-      ]);
-      const reqJson = await safeJson(reqRes);
-      const delJson = await safeJson(delRes);
-      const reqs = Array.isArray(reqJson)
-        ? reqJson
-        : (reqJson && Array.isArray(reqJson.data) ? reqJson.data : []);
-      const dels = Array.isArray(delJson)
-        ? delJson
-        : (delJson && Array.isArray(delJson.data) ? delJson.data : []);
+      const headers = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
+      // Dedicated lightweight endpoint (latest 5 of each, few columns) —
+      // avoids the full /requisitions and /deliveries index queries, which
+      // is what made the panel slow to open.
+      const res = await fetch('/notifications', { headers });
+      const json = await safeJson(res);
+      const reqs = (json && Array.isArray(json.requisitions)) ? json.requisitions : [];
+      const dels = (json && Array.isArray(json.deliveries)) ? json.deliveries : [];
 
       // Build items
       const items = [];
@@ -74,6 +68,27 @@
     if(reqBadge){ reqBadge.textContent = reqCount; reqBadge.classList.toggle('red', reqCount>0); }
     if(delBadge){ delBadge.textContent = delCount; delBadge.classList.toggle('red', delCount>0); }
   }
+
+  /* ---------- Live nav badge counts (Requests / PO / Logs) ---------- */
+  async function pollNavCounts(){
+    try{
+      const res = await fetch('/nav-counts', { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+      const json = await safeJson(res);
+      if(!json) return;
+      const poBadge = document.querySelector("a[href*='purchase-orders'] .nav-badge");
+      const reqBadge = document.querySelector("a[href*='requisitions'] .nav-badge");
+      const delBadge = document.querySelector("a[href*='deliveries'] .nav-badge");
+      if(poBadge){ poBadge.textContent = json.purchaseOrders ?? 0; poBadge.classList.toggle('red', (json.purchaseOrders ?? 0) > 0); }
+      if(reqBadge){ reqBadge.textContent = json.requisitions ?? 0; reqBadge.classList.toggle('red', (json.requisitions ?? 0) > 0); }
+      if(delBadge){ delBadge.textContent = json.deliveries ?? 0; delBadge.classList.toggle('red', (json.deliveries ?? 0) > 0); }
+    }catch(err){
+      // silent — badges just keep their last known value
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    pollNavCounts();
+    setInterval(pollNavCounts, 20000);
+  });
 
   document.addEventListener('click', (e)=>{
     const panel = document.getElementById('notif-panel');

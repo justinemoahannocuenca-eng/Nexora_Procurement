@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SequenceNumber;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -22,25 +23,23 @@ class PurchaseOrderController extends Controller
     }
 
     /**
-     * Insert the purchase order, automatically regenerating the po_number
-     * if it collides with one that already exists. This is what was making
-     * "Submit for Approval" silently fail: the browser pre-fills the PO
-     * number from an in-memory counter that resets on every page load, so
-     * once real PO numbers passed that counter, every new submission hit
-     * a duplicate po_number and the insert was rejected by the database.
+     * Insert the purchase order under a server-generated po_number
+     * (PO-YYYY-NNNN, next free sequence for the year). The browser's
+     * pre-filled number is only a placeholder — it's always regenerated
+     * here so the format never drifts and never collides.
      */
     private function insertPurchaseOrder(array $insert): int
     {
         $attempts = 0;
-        $currentInsert = $insert;
 
         while ($attempts < 3) {
+            $currentInsert = $insert;
+            $currentInsert['po_number'] = SequenceNumber::generate('purchase_orders', 'po_number', 'PO');
+
             try {
                 return DB::table('purchase_orders')->insertGetId($currentInsert);
             } catch (\Throwable $e) {
                 if ($this->isDuplicateKeyException($e)) {
-                    $suffix = now()->format('YmdHis') . '-' . random_int(1000, 9999);
-                    $currentInsert['po_number'] = $insert['po_number'] . '-' . $suffix;
                     $attempts++;
                     continue;
                 }
