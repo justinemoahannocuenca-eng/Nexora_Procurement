@@ -20,10 +20,6 @@
           <div class="status-label">Pending</div>
           <div class="status-count">{{ $statusCounts->get('pending', 0) }}</div>
         </div>
-        <div class="status-chart-item scheduled" data-status="scheduled" style="background:linear-gradient(135deg,#f0eaff,#dcd0fb);border-color:#7a5af0;" onclick="filterByStatus('deliveries-table', 'scheduled', this)">
-          <div class="status-label">Scheduled</div>
-          <div class="status-count">{{ $statusCounts->get('scheduled', 0) }}</div>
-        </div>
         <div class="status-chart-item intransit" data-status="intransit" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-color:#2196f3;" onclick="filterByStatus('deliveries-table', 'intransit', this)">
           <div class="status-label">intransit</div>
           <div class="status-count">{{ $statusCounts->get('intransit', 0) }}</div>
@@ -42,10 +38,6 @@
         <div class="status-chart-item completed" data-status="completed" style="background:linear-gradient(135deg,#e0f2f1,#b2dfdb);border-color:#009688;" onclick="filterByStatus('deliveries-table', 'completed', this)">
           <div class="status-label">Completed</div>
           <div class="status-count">{{ $statusCounts->get('completed', 0) }}</div>
-        </div>
-        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#f1f3f6,#e2e6ee);border-color:#7c88a3;" onclick="filterByStatus('deliveries-table', 'cancelled', this)">
-          <div class="status-label">Cancelled</div>
-          <div class="status-count">{{ $statusCounts->get('cancelled', 0) }}</div>
         </div>
       </div>
       

@@ -137,50 +137,66 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     const itemField = form.querySelector('[name="item"]');
     const qtyField = form.querySelector('[name="qty"]');
     const unitPriceField = form.querySelector('[name="unitPrice"]');
-    const amountField = form.querySelector('[name="amount"]');
     const brandField = form.querySelector('[name="brand"]');
-    const update = () => applyPoAutofill(form);
+    // Unit price only auto-fills when an item is actually selected. Every
+    // other trigger (supplier change, typing qty/price) just recomputes the
+    // total from whatever unit price is already in the field — it must
+    // never silently pick a price on its own.
     supplierField?.addEventListener('change', () => {
+      if(brandField){
+        const entry = getSupplierCatalogEntry((supplierField.value || '').trim());
+        const supplierName = (supplierField.value || '').trim();
+        if(entry && (!brandField.value || brandField.value === supplierName)) brandField.value = entry.brand || supplierName;
+      }
       populatePoItemSelect(form);
-      update();
+      recomputePoAmount(form);
     });
     itemField?.addEventListener('change', () => {
       form.__poCurrentItem = itemField.value;
-      update();
+      applyPoItemAutofill(form);
     });
-    itemField?.addEventListener('input', () => {
-      form.__poCurrentItem = itemField.value;
-      update();
-    });
-    qtyField?.addEventListener('input', update);
-    qtyField?.addEventListener('change', update);
-    unitPriceField?.addEventListener('input', update);
-    unitPriceField?.addEventListener('change', update);
-    brandField?.addEventListener('input', update);
+    qtyField?.addEventListener('input', () => recomputePoAmount(form));
+    qtyField?.addEventListener('change', () => recomputePoAmount(form));
+    unitPriceField?.addEventListener('input', () => recomputePoAmount(form));
+    unitPriceField?.addEventListener('change', () => recomputePoAmount(form));
   }
 
-  function applyPoAutofill(form){
+  function recomputePoAmount(form){
     if(!form) return;
-    const supplierField = form.querySelector('[name="supplier"]');
-    const itemField = form.querySelector('[name="item"]');
     const qtyField = form.querySelector('[name="qty"]');
     const unitPriceField = form.querySelector('[name="unitPrice"]');
     const amountField = form.querySelector('[name="amount"]');
-    const brandField = form.querySelector('[name="brand"]');
-    const supplierName = (supplierField?.value || '').trim();
-    const entry = getSupplierCatalogEntry(supplierName);
-    if(entry){
-      if(brandField && (!brandField.value || brandField.value === supplierName)) brandField.value = entry.brand || supplierName;
-      const itemValue = (itemField?.value || '').trim().toLowerCase();
-      const selectedOption = itemField?.selectedOptions?.[0];
-      const selectedUnitPrice = Number(selectedOption?.dataset?.unitPrice || 0);
-      const match = (entry.products || []).find(p => String(p.name || '').toLowerCase().includes(itemValue));
-      if(match && unitPriceField && (!unitPriceField.value || Number(unitPriceField.value) === 0)) unitPriceField.value = Number(match.unitPrice || 0);
-      else if(selectedUnitPrice && unitPriceField && (!unitPriceField.value || Number(unitPriceField.value) === 0)) unitPriceField.value = selectedUnitPrice;
-    }
     const qty = Number(qtyField?.value || 0);
     const unitPrice = Number(unitPriceField?.value || 0);
     if(amountField) amountField.value = (qty * unitPrice).toFixed(2);
+  }
+
+  // Fills the unit price from the selected item's catalog price, then
+  // recomputes the total — this is the only path allowed to set unit price
+  // automatically.
+  function applyPoItemAutofill(form){
+    if(!form) return;
+    const supplierField = form.querySelector('[name="supplier"]');
+    const itemField = form.querySelector('[name="item"]');
+    const unitPriceField = form.querySelector('[name="unitPrice"]');
+    const itemValue = (itemField?.value || '').trim();
+    if(itemValue){
+      const supplierName = (supplierField?.value || '').trim();
+      const entry = getSupplierCatalogEntry(supplierName);
+      const selectedOption = itemField?.selectedOptions?.[0];
+      const selectedUnitPrice = Number(selectedOption?.dataset?.unitPrice || 0);
+      const match = (entry?.products || []).find(p => String(p.name || '').toLowerCase() === itemValue.toLowerCase());
+      if(match && unitPriceField){
+        unitPriceField.value = Number(match.unitPrice || 0);
+      } else if(selectedUnitPrice && unitPriceField){
+        unitPriceField.value = selectedUnitPrice;
+      }
+    }
+    recomputePoAmount(form);
+  }
+
+  function applyPoAutofill(form){
+    recomputePoAmount(form);
   }
 
   function refreshDeliveryPoOptions(){

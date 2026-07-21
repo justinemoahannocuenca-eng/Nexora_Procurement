@@ -141,7 +141,7 @@
               <tr>
                 <td><strong>{{ $po->po_number }}</strong></td>
                 <td>{{ $suppliersMap[$po->supplier_id] ?? 'N/A' }}</td>
-                <td>{{ number_format($po->amount, 2) }} PHP</td>
+                <td>₱{{ number_format($po->amount, 2) }}</td>
                 <td><span class="priority-pill {{ $po->priority }}">{{ ucfirst($po->priority) }}</span></td>
                 <td><span class="status-pill {{ $po->status }}">{{ ucfirst($po->status) }}</span></td>
                 <td>{{ \Carbon\Carbon::parse($po->order_date)->format('M d, Y') }}</td>
@@ -159,7 +159,7 @@
       </div>
         <div class="panel dash-del-panel">
           <h2><span class="live-pulse"></span>Delivery Status</h2>
-          <div class="panel-sub">{{ $deliveryCount }} total / {{ $pendingDeliveries }} pending</div>
+          <div class="panel-sub">{{ $deliveryCount }} total / {{ $pendingDeliveries }} in-transit</div>
           <div class="dash-del-list" id="dash-del-list">
             @if(count($recentDeliveries) > 0)
               @foreach($recentDeliveries as $delivery)

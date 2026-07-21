@@ -15,41 +15,26 @@
     panel.innerHTML = '<div style="padding:12px;text-align:center;color:#7b8796">Loading notifications…</div>';
     try{
       const headers = { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' };
-      // Dedicated lightweight endpoint (latest 5 of each, few columns) —
-      // avoids the full /requisitions and /deliveries index queries, which
-      // is what made the panel slow to open.
+      // Dedicated lightweight endpoint — newest POs that were approved or
+      // rejected, few columns only.
       const res = await fetch('/notifications', { headers });
       const json = await safeJson(res);
-      const reqs = (json && Array.isArray(json.requisitions)) ? json.requisitions : [];
-      const dels = (json && Array.isArray(json.deliveries)) ? json.deliveries : [];
+      const pos = (json && Array.isArray(json.purchaseOrders)) ? json.purchaseOrders : [];
 
-      // Build items
-      const items = [];
-      // Prioritize pending requisitions
-      (reqs || []).slice(0,5).forEach(r => {
-        items.push({ type: 'req', title: r.rq || r.ref || r.id || 'Requisition', text: `${r.item || ''} · Qty ${r.qty || r.quantity || ''}`, meta: r.requester || r.dept || '' });
-      });
-      // Add deliveries with relevant statuses
-      (dels || []).slice(0,5).forEach(d => {
-        items.push({ type: 'del', title: d.dr || d.id || d.ref || 'Delivery', text: `${d.items || d.items || ''} · Qty ${d.qty || ''}`, meta: d.status || '' });
-      });
-
-      if(items.length === 0){
+      if(pos.length === 0){
         panel.innerHTML = `<div class="notif-item ok"><span class="notif-icon">✓</span><div class="notif-content"><strong>No alerts</strong>You have no new notifications right now.<small>System · live</small></div></div>`;
-        updateNavCounts(0,0);
         return;
       }
 
       panel.innerHTML = '';
-      let reqCount = 0, delCount = 0;
-      items.forEach(it => {
+      pos.forEach(po => {
+        const isApproved = String(po.status || '').toLowerCase() === 'approved';
         const div = document.createElement('div');
-        div.className = 'notif-item ' + (it.type === 'req' ? 'warn' : 'ok');
-        div.innerHTML = `<span class="notif-icon">${it.type==='req' ? 'R' : 'D'}</span><div class="notif-content"><strong>${escapeHtml(it.title)}</strong><div>${escapeHtml(it.text)}</div><small>${escapeHtml(it.meta)}</small></div>`;
+        div.className = 'notif-item ' + (isApproved ? 'ok' : 'warn');
+        const statusLabel = isApproved ? 'Approved' : 'Rejected';
+        div.innerHTML = `<span class="notif-icon">${isApproved ? '✓' : '✕'}</span><div class="notif-content"><strong>${escapeHtml(po.po)}</strong><div>${statusLabel}${po.supplier ? ' · ' + escapeHtml(po.supplier) : ''}</div><small>Purchase Order</small></div>`;
         panel.appendChild(div);
-        if(it.type === 'req') reqCount++; else if(it.type === 'del') delCount++;
       });
-      updateNavCounts(reqCount, delCount);
     }catch(err){
       panel.innerHTML = `<div style="padding:12px;color:#c34">Unable to load notifications</div>`;
       console.error('loadNotifications', err);
@@ -61,13 +46,6 @@
   }
 
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"]+/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)); }
-
-  function updateNavCounts(reqCount, delCount){
-    const reqBadge = document.querySelector("a[href*='requisitions'] .nav-badge");
-    const delBadge = document.querySelector("a[href*='deliveries'] .nav-badge");
-    if(reqBadge){ reqBadge.textContent = reqCount; reqBadge.classList.toggle('red', reqCount>0); }
-    if(delBadge){ delBadge.textContent = delCount; delBadge.classList.toggle('red', delCount>0); }
-  }
 
   /* ---------- Live nav badge counts (Requests / PO / Logs) ---------- */
   async function pollNavCounts(){

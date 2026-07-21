@@ -31,51 +31,37 @@ class NotificationController extends Controller
     }
 
     /**
-     * Lightweight feed for the notification bell panel. Previously the
-     * panel called the full /requisitions and /deliveries index routes,
-     * which scan and cross-join the entire table just to build a 5-item
-     * preview — that's what made the panel feel slow to open. This only
-     * ever pulls the newest 5 rows of each with the handful of columns
-     * the panel actually renders.
+     * The column that holds a requisition's human-readable reference number
+     * on each external connection — used to match against
+     * purchase_orders.requisition_reference so "pending" can be derived the
+     * same way RequisitionController@index derives it (no matching PO yet).
+     */
+    private function requisitionRefColumn($connection): string
+    {
+        return $connection->getName() === 'orderfullfillment' ? 'req_number' : 'req_id';
+    }
+
+    /**
+     * Lightweight feed for the notification bell panel — the newest
+     * purchase orders that have been approved or rejected.
      */
     public function index(Request $request)
     {
-        $requisitions = collect();
-        foreach ($this->requisitionConnections() as $connection) {
-            $hasStatus = $connection->getSchemaBuilder()->hasColumn('requisitions', 'status');
-            $rows = $connection->table('requisitions')
-                ->when($hasStatus, fn ($q) => $q->orderByRaw("status ILIKE 'pending' desc"))
-                ->orderBy('created_at', 'desc')
-                ->limit(5)
-                ->get();
-            foreach ($rows as $row) {
-                $requisitions->push($row);
-            }
-        }
-        $requisitions = $requisitions->sortByDesc('created_at')->take(5)->values();
-
-        $deliveries = DB::table('deliveries')
-            ->select('id', 'shipment_number', 'items', 'qty', 'status', 'created_at')
-            ->orderBy('created_at', 'desc')
-            ->limit(5)
+        $purchaseOrders = DB::table('purchase_orders')
+            ->leftJoin('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
+            ->whereIn('purchase_orders.status', ['approved', 'rejected'])
+            ->orderBy('purchase_orders.updated_at', 'desc')
+            ->limit(8)
+            ->select('purchase_orders.po_number', 'purchase_orders.status', 'purchase_orders.updated_at', 'suppliers.name as supplier_name')
             ->get();
 
         return response()->json([
-            'requisitions' => $requisitions->map(function ($r) {
+            'purchaseOrders' => $purchaseOrders->map(function ($po) {
                 return [
-                    'rq' => $r->req_number ?? $r->req_id ?? $r->id,
-                    'item' => $r->item ?? $r->part_name ?? '',
-                    'qty' => $r->quantity ?? $r->qty ?? '',
-                    'requester' => $r->requested_by ?? '',
-                    'dept' => $r->department ?? '',
-                ];
-            })->values(),
-            'deliveries' => $deliveries->map(function ($d) {
-                return [
-                    'dr' => $d->shipment_number,
-                    'items' => $d->items,
-                    'qty' => $d->qty,
-                    'status' => $d->status,
+                    'po' => $po->po_number,
+                    'status' => $po->status,
+                    'supplier' => $po->supplier_name ?? '',
+                    'updated_at' => $po->updated_at,
                 ];
             })->values(),
         ]);
@@ -90,16 +76,23 @@ class NotificationController extends Controller
         $pendingPOs = DB::table('purchase_orders')->where('status', 'pending')->count();
         $pendingDeliveries = DB::table('deliveries')->whereIn('status', ['pending', 'scheduled', 'intransit'])->count();
 
-        $pendingRequisitions = 0;
+        // A requisition is "Pending" only until a PO exists for it — same
+        // rule as the Requisitions page. The old check counted every row on
+        // connections without a real `status` column (orderfullfillment),
+        // wildly inflating the badge with already-processed requisitions.
+        $allRefs = [];
+        $totalRequisitions = 0;
         foreach ($this->requisitionConnections() as $connection) {
-            if ($connection->getSchemaBuilder()->hasColumn('requisitions', 'status')) {
-                $pendingRequisitions += $connection->table('requisitions')
-                    ->whereRaw('status ILIKE ?', ['pending'])
-                    ->count();
-            } else {
-                $pendingRequisitions += $connection->table('requisitions')->count();
-            }
+            $refCol = $this->requisitionRefColumn($connection);
+            $refs = $connection->table('requisitions')->pluck($refCol)->filter()->all();
+            $totalRequisitions += count($refs);
+            $allRefs = array_merge($allRefs, $refs);
         }
+        $matchedRefs = empty($allRefs) ? 0 : DB::table('purchase_orders')
+            ->whereIn('requisition_reference', $allRefs)
+            ->distinct()
+            ->count('requisition_reference');
+        $pendingRequisitions = max(0, $totalRequisitions - $matchedRefs);
 
         return response()->json([
             'purchaseOrders' => $pendingPOs,
