@@ -46,6 +46,59 @@
     const found = [...document.querySelectorAll('#po-table tbody tr')].find(r => textFrom(r.children[0]) === po);
     return found ? supplierNameFromCell(found.children[1]) : '—';
   }
+  function normalizePoStatus(status){
+    const map = {
+      'approved': 'approved',
+      'pending': 'pending',
+      'rejected': 'rejected',
+      'cancelled': 'cancelled',
+      'processing': 'processing',
+      'completed': 'completed'
+    };
+    const key = String(status || '').trim().toLowerCase();
+    return map[key] || key;
+  }
+
+  function persistPurchaseOrderStatus(row, status){
+    if(!row || !row.dataset.id) return Promise.resolve();
+    const id = row.dataset.id;
+    const normalizedStatus = normalizePoStatus(status);
+    return fetch(`/purchase-orders/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: new URLSearchParams({ status: normalizedStatus }).toString()
+    }).then(() => {}).catch(() => {
+      console.warn('Unable to persist PO status for', id);
+    });
+  }
+  function persistRequisitionStatus(row, status){
+    if(!row || !row.dataset.id) return Promise.resolve();
+    const id = row.dataset.id;
+    return fetch(`/requisitions/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+      },
+      body: new URLSearchParams({ status: status }).toString()
+    }).then(() => {}).catch(() => {
+      console.warn('Unable to persist requisition status for', id);
+    });
+  }
+  function syncRelatedRequisitionStatusForPO(row, poStatus){
+    if(!row) return;
+    const lookupRef = row.dataset.reqRef || textFrom(row.children[0]);
+    const reqRow = findReqRowByRef(lookupRef);
+    if(!reqRow) return;
+    const reqStatus = poStatus === 'Approved' ? 'Processing' : (poStatus === 'Rejected' ? 'Pending' : (poStatus === 'Completed' ? 'Completed' : poStatus));
+    updateRequisitionStatus(lookupRef, reqStatus);
+    persistRequisitionStatus(reqRow, reqStatus);
+  }
   function inferSupplierCategory(name){
     const found = [...document.querySelectorAll('#po-table tbody tr')].find(r => supplierNameFromCell(r.children[1]) === name);
     return found ? textFrom(found.children[2]) : 'General Procurement';
@@ -116,7 +169,7 @@
     }
     if(type === 'req'){
       const ref = textFrom(row.children[0]);
-      return {type, key:ref, title:`Requisition · ${ref}`, ref, item:textFrom(row.children[1]), qty:Number(textFrom(row.children[2])) || 0, delivery:textFrom(row.children[3]), dept:textFrom(row.children[4]), requester:textFrom(row.children[5]), status:textFrom(row.children[6]), date:textFrom(row.children[7]), time:row.dataset.time || '10:30 AM', uom:row.dataset.uom || 'pcs', notes:row.dataset.notes || `Requested for ${textFrom(row.children[4])} operations.`};
+      return {type, key:ref, title:`Requisition · ${ref}`, ref, item:textFrom(row.children[1]), qty:Number(textFrom(row.children[2])) || 0, delivery:textFrom(row.children[3]), dept:textFrom(row.children[4]), requester:textFrom(row.children[5]), status:textFrom(row.children[6]), date:textFrom(row.children[7]), time:row.dataset.time || '10:30 AM', uom:row.dataset.uom || 'pcs', notes:row.dataset.notes || `Requested for ${textFrom(row.children[4])} operations.`, po:textFrom(row.dataset.po || ''), hasPO: row.dataset.hasPo === '1'};
     }
     if(type === 'invoice'){
       const inv = textFrom(row.children[0]);
@@ -167,8 +220,8 @@
   }
   function updateRowStatus(row, status){
     const type = getTableType(row);
-    row.dataset.status = String(status || '').toLowerCase().replace(/\s+/g,'');
-    const pillCell = type === 'delivery' ? row.children[4] : (type === 'invoice' ? row.children[4] : (type === 'req' ? row.children[6] : row.children[6]));
+    row.dataset.status = String(status || '').toLowerCase().replace(/\s+/g,'-');
+    const pillCell = type === 'delivery' ? row.children[5] : (type === 'invoice' ? row.children[4] : (type === 'req' ? row.children[6] : row.children[6]));
     if(pillCell) pillCell.innerHTML = statusPill(status);
   }
   function renderViewRecord(row){
@@ -181,8 +234,8 @@
       const statusKey = String(record.status || '').toLowerCase();
       if(statusKey === 'pending'){
         setViewActions(
-          {label:'Reject PO', className:'btn-reject', onClick:()=>{ updateRowStatus(row, 'Rejected'); closeViewModal(); showToast(`${record.po} rejected`, 'no'); }},
-          {label:'Approve PO', className:'btn-approve', onClick:()=>{ updateRowStatus(row, 'Approved'); closeViewModal(); showToast(`${record.po} approved for fulfillment`, 'ok'); }}
+          {label:'Reject PO', className:'btn-reject', onClick:()=>{ updateRowStatus(row, 'Rejected'); persistPurchaseOrderStatus(row, 'Rejected').then(() => { syncRelatedRequisitionStatusForPO(row, 'Rejected'); }); closeViewModal(); showToast(`${record.po} rejected`, 'no'); }},
+          {label:'Approve PO', className:'btn-approve', onClick:()=>{ updateRowStatus(row, 'Approved'); persistPurchaseOrderStatus(row, 'Approved').then(() => { syncRelatedRequisitionStatusForPO(row, 'Approved'); }); closeViewModal(); showToast(`${record.po} approved for fulfillment`, 'ok'); }}
         );
       } else if(statusKey === 'approved'){
         setViewActions(
@@ -201,8 +254,7 @@
       setViewActions({label:'Close', className:'btn-view', onClick:closeViewModal}, null);
     } else if(record.type === 'req'){
       body = `<div class="detail-grid"><div class="detail-card"><h4>Request details</h4><div class="modal-row"><span>Requisition no.</span><span>${htmlEscape(record.ref)}</span></div><div class="modal-row"><span>Item</span><span>${htmlEscape(record.item)}</span></div><div class="modal-row"><span>Quantity</span><span>${record.qty} ${htmlEscape(record.uom)}</span></div><div class="modal-row"><span>Delivery status</span><span>${htmlEscape(record.delivery)}</span></div></div><div class="detail-card"><h4>Request workflow</h4><div class="modal-row"><span>Department</span><span>${htmlEscape(record.dept)}</span></div><div class="modal-row"><span>Requested by</span><span>${htmlEscape(record.requester)}</span></div><div class="modal-row"><span>Status</span><span>${htmlEscape(record.status)}</span></div><div class="modal-row"><span>Date & time</span><span>${htmlEscape(record.date)} · ${htmlEscape(record.time)}</span></div></div></div><div class="detail-note"><b>Justification</b><br>${htmlEscape(record.notes)}</div>`;
-      // Always allow creating a PO from a requisition view (prefills PO modal)
-      const poBtn = {label:'Create Purchase Order', className:'btn-primary', onClick:()=>{ convertReqToPO(record.ref, record.item, record.qty); closeViewModal(); }};
+      const poBtn = record.hasPO ? null : {label:'Create Purchase Order', className:'btn-primary', onClick:()=>{ convertReqToPO(record.ref, record.item, record.qty); closeViewModal(); }};
       setViewActions({label:'Close', className:'btn-view', onClick:closeViewModal}, null, poBtn);
     } else if(record.type === 'invoice'){
       body = `<div class="detail-grid"><div class="detail-card"><h4>Invoice overview</h4><div class="modal-row"><span>Invoice no.</span><span>${htmlEscape(record.inv)}</span></div><div class="modal-row"><span>PO number</span><span>${htmlEscape(record.po)}</span></div><div class="modal-row"><span>Supplier</span><span>${htmlEscape(record.supplier)}</span></div><div class="modal-row"><span>Invoice date</span><span>${htmlEscape(record.date)}</span></div></div><div class="detail-card"><h4>Payment details</h4><div class="modal-row"><span>Amount</span><span>${money(record.amount)}</span></div><div class="modal-row"><span>Due date</span><span>${htmlEscape(record.dueDate)}</span></div><div class="modal-row"><span>Payment method</span><span>${htmlEscape(record.method)}</span></div><div class="modal-row"><span>Status</span><span>${htmlEscape(record.status)}</span></div></div></div><div class="detail-note"><b>Notes</b><br>${htmlEscape(record.notes)}</div>`;

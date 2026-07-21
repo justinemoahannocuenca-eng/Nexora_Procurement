@@ -114,7 +114,7 @@
                     $badgeColor = $colors[$h % count($colors)];
                   }
                 @endphp
-                <tr data-id="{{ $p->id }}" data-item="{{ $p->item ?? '' }}" data-qty="{{ $p->qty ?? 0 }}" data-amount="{{ $p->amount ?? 0 }}" data-unit-price="{{ $p->unit_price ?? 0 }}" data-priority="{{ $p->priority ?? 'normal' }}" data-status="{{ $p->status ?? 'pending' }}" data-expected="{{ $p->expected_delivery_date ?? '' }}">
+                <tr data-id="{{ $p->id }}" data-item="{{ $p->item ?? '' }}" data-qty="{{ $p->qty ?? 0 }}" data-amount="{{ $p->amount ?? 0 }}" data-unit-price="{{ $p->unit_price ?? 0 }}" data-priority="{{ $p->priority ?? 'normal' }}" data-status="{{ strtolower(str_replace([' ', '_'], '-', $p->status ?? 'pending')) }}" data-expected="{{ $p->expected_delivery_date ?? '' }}" data-req-ref="{{ $p->requisition_reference ?? '' }}">
                   <td><a class="po-link">{{ $p->po_number }}</a></td>
                   <td><div class="supplier-pill-cell"><span class="supplier-pill"><span class="supplier-badge" style="background: {{ $badgeColor }}">{{ $initials }}</span>{{ $p->supplier_name ?? '—' }}</span></div></td>
                   <td>{{ $p->item ?? '—' }}</td>
@@ -125,9 +125,10 @@
                     if(!in_array($priorityClass, ['urgent','high','normal','low'])) {
                       $priorityClass = 'normal';
                     }
+                    $statusClass = strtolower(str_replace(' ', '-', $p->status ?? 'pending'));
                   @endphp
                   <td><span class="priority-pill {{ $priorityClass }}">{{ strtoupper($p->priority ?? 'NORMAL') }}</span></td>
-                  <td>{{ ucfirst($p->status ?? 'pending') }}</td>
+                  <td><span class="status-pill {{ $statusClass }}">{{ ucfirst($p->status ?? 'pending') }}</span></td>
                   <td>{{ $p->order_date ?? '' }}</td>
                   <td><span class="row-actions"><button title="View">👁</button><button title="Edit">✎</button><button class="del" title="Delete">🗑</button></span></td>
                 </tr>

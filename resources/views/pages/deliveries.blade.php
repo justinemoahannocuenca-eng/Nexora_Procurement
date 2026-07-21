@@ -111,13 +111,13 @@
                       $badgeColor = $colors[$h % count($colors)];
                     }
                   @endphp
-                  <tr data-id="{{ $d->id }}" data-po="{{ $d->po_number ?? '' }}" data-sup="{{ $d->supplier_name ?? '' }}" data-stage="{{ $d->stage ?? '' }}" data-status="{{ $d->status ?? '' }}" data-date="{{ $d->delivery_date ?? '' }}">
+                  <tr data-id="{{ $d->id }}" data-po="{{ $d->po_number ?? '' }}" data-sup="{{ $d->supplier_name ?? '' }}" data-stage="{{ $d->stage ?? '' }}" data-status="{{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'in-transit')) }}" data-date="{{ $d->delivery_date ?? '' }}">
                     <td><a class="po-link">{{ $d->shipment_number }}</a></td>
                     <td><a class="po-link">{{ $d->po_number ?? '—' }}</a></td>
                     <td><div class="supplier-pill-cell"><span class="supplier-pill"><span class="supplier-badge" style="background: {{ $badgeColor }}">{{ $initials }}</span>{{ $d->supplier_name ?? '—' }}</span></div></td>
                     <td>{{ $d->items ?? '—' }}</td>
                     <td>{{ $d->estimated_arrival ?? $d->delivery_date ?? '' }}</td>
-                    <td>{{ ucfirst($d->status ?? 'in-transit') }}</td>
+                    <td><span class="status-pill {{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'in-transit')) }}">{{ ucwords(str_replace('-', ' ', $d->status ?? 'in-transit')) }}</span></td>
                     <td>{{ $d->delivery_date ?? '' }}</td>
                     <td><span class="row-actions"><button title="Track">🔎</button></span></td>
                   </tr>

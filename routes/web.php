@@ -19,6 +19,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
 Route::prefix('purchase-orders')->name('purchase-orders.')->group(function () {
     Route::get('/', [PurchaseOrderController::class, 'index'])->name('index');
+    Route::get('/approved', [PurchaseOrderController::class, 'approved'])->name('approved');
     Route::post('/', [PurchaseOrderController::class, 'store'])->name('store');
     Route::put('/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->name('update');
     Route::delete('/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->name('destroy');

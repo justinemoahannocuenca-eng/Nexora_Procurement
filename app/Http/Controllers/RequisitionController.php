@@ -79,7 +79,39 @@ class RequisitionController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('pages.requisitions', compact('requisitions'));
+        $requisitionRefs = $requisitions->pluck('requisition_number')->filter()->all();
+
+        $purchaseOrders = DB::table('purchase_orders')
+            ->whereIn('requisition_reference', $requisitionRefs)
+            ->get()
+            ->keyBy('requisition_reference');
+
+        $requisitions = $requisitions->map(function ($req) use ($purchaseOrders) {
+            $ref = $req->requisition_number;
+            $po = $purchaseOrders->get($ref);
+
+            if ($po) {
+                $poStatus = strtolower(trim($po->status ?? 'pending'));
+                $currentStatus = strtolower(trim($req->status ?? 'pending'));
+                if (in_array($currentStatus, ['pending', 'processing', ''], true)) {
+                    if (in_array($poStatus, ['pending', 'approved', 'processing'], true)) {
+                        $req->status = 'Processing';
+                    } elseif ($poStatus === 'completed') {
+                        $req->status = 'Completed';
+                    }
+                }
+                $req->po_number = $po->po_number;
+                $req->po_status = $po->status;
+            }
+
+            return $req;
+        });
+
+        $statusCounts = $requisitions->map(function ($req) {
+            return strtolower(str_replace(' ', '-', $req->status ?? 'Pending'));
+        })->countBy();
+
+        return view('pages.requisitions', compact('requisitions', 'statusCounts'));
     }
 
     /**

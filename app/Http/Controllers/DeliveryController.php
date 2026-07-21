@@ -46,7 +46,7 @@ class DeliveryController extends Controller
             'shipment_number' => $validated['dr'],
             'purchase_order_id' => $purchaseOrder?->id ?? null,
             'supplier_id' => $supplier?->id ?? null,
-            'status' => in_array(strtolower($validated['status']), ['in-transit','delivered','delayed','scheduled','pending','cancelled']) ? strtolower($validated['status']) : 'in-transit',
+            'status' => in_array(strtolower($validated['status']), ['in-transit','delivered','delayed','scheduled','pending','cancelled','completed']) ? strtolower($validated['status']) : 'in-transit',
             'qty' => $validated['qty'] ?? null,
             'qty_expected' => $validated['qty'] ?? null,
             'items' => $validated['items'] ?? null,
@@ -63,7 +63,7 @@ class DeliveryController extends Controller
     public function update(Request $request, $delivery)
     {
         $validated = $request->validate([
-            'status' => 'nullable|string|max:20',
+            'status' => 'nullable|string|in:pending,scheduled,in-transit,delivered,delayed,cancelled,completed',
             'remarks' => 'nullable|string',
         ]);
 

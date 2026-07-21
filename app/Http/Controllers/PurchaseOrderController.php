@@ -26,6 +26,18 @@ class PurchaseOrderController extends Controller
         return view('pages.purchase-orders', compact('purchaseOrders', 'suppliers'));
     }
 
+    public function approved(Request $request)
+    {
+        $approvedPurchaseOrders = DB::table('purchase_orders')
+            ->leftJoin('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
+            ->select('purchase_orders.*', 'suppliers.name as supplier_name')
+            ->where('purchase_orders.status', 'approved')
+            ->orderBy('purchase_orders.order_date', 'desc')
+            ->get();
+
+        return response()->json($approvedPurchaseOrders);
+    }
+
     /**
      * Handle the "+ New PO" modal submit (submitAddPO in app-forms.js).
      */
@@ -105,8 +117,17 @@ class PurchaseOrderController extends Controller
             'remarks' => 'nullable|string',
         ]);
 
+        $status = $validated['status'] ?? null;
+        if ($status !== null) {
+            $status = strtolower(trim($status));
+            $allowed = ['pending', 'approved', 'rejected', 'cancelled', 'processing', 'completed'];
+            if (!in_array($status, $allowed, true)) {
+                $status = null;
+            }
+        }
+
         DB::table('purchase_orders')->where('id', $purchaseOrder)->update([
-            'status' => $validated['status'] ?? DB::raw('status'),
+            'status' => $status ?? DB::raw('status'),
             'amount' => $validated['amount'] ?? DB::raw('amount'),
             'remarks' => $validated['remarks'] ?? DB::raw('remarks'),
             'updated_at' => now(),

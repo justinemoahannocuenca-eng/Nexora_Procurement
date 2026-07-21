@@ -5,7 +5,7 @@
 @section('content')
 <section id="page-requisitions">
       @php
-        $statusCounts = collect($requisitions)->map(function ($req) {
+        $statusCounts = $statusCounts ?? collect($requisitions)->map(function ($req) {
             return strtolower(str_replace(' ', '-', $req->status ?? 'Pending'));
         })->countBy();
       @endphp
@@ -103,7 +103,7 @@
           </thead>
           <tbody>
             @forelse($requisitions as $req)
-              <tr data-id="{{ $req->id ?? '' }}" data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}">
+              <tr data-id="{{ $req->id ?? '' }}" data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}" data-po="{{ isset($req->po_number) ? $req->po_number : '' }}" data-has-po="{{ isset($req->po_number) && $req->po_number ? '1' : '0' }}">
                 <td><a class="po-link">{{ $req->requisition_number }}</a></td>
                 <td>{{ $req->item }}</td>
                 <td>{{ $req->qty }}</td>

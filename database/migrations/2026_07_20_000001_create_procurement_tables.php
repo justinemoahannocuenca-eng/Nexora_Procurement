@@ -115,7 +115,7 @@ return new class extends Migration
                 CONSTRAINT deliveries_supplier_id_foreign
                     FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE SET NULL,
                 CONSTRAINT deliveries_status_check CHECK (
-                    status IN ('pending', 'scheduled', 'in-transit', 'delivered', 'delayed', 'cancelled')
+                    status IN ('pending', 'scheduled', 'in-transit', 'delivered', 'delayed', 'cancelled', 'completed')
                 )
             )
         SQL);

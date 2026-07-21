@@ -187,15 +187,84 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     const modal = document.getElementById('add-delivery-modal');
     const poField = modal?.querySelector('[name="po"]');
     if(!poField) return;
+
+    const currentValue = poField.value || '';
     const approvedRows = [...document.querySelectorAll('#po-table tbody tr')].filter(row => {
       const status = String(row.dataset.status || textFrom(row.children[6]) || '').toLowerCase().trim();
       return status === 'approved';
     });
-    const currentValue = poField.value || '';
-    poField.innerHTML = '<option value="">Select PO...</option>' + approvedRows.map(row => {
-      const poNumber = htmlEscape(textFrom(row.children[0]));
-      return `<option value="${poNumber}"${poNumber === currentValue ? ' selected' : ''}>${poNumber}</option>`;
-    }).join('');
+    const noApprovedText = 'No approved purchase orders available';
+
+    if(approvedRows.length){
+      poField.innerHTML = '<option value="">Select PO...</option>' + approvedRows.map(row => {
+        const poNumber = htmlEscape(textFrom(row.children[0]));
+        return `<option value="${poNumber}"${poNumber === currentValue ? ' selected' : ''}>${poNumber}</option>`;
+      }).join('');
+      window.APPROVED_PO_CACHE = approvedRows.reduce((acc,row) => {
+        const poNumber = textFrom(row.children[0]);
+        acc[poNumber] = {
+          po: poNumber,
+          supplier: supplierNameFromCell(row.children[1]),
+          item: row.dataset.item || textFrom(row.children[2]) || '',
+          qty: row.dataset.qty || '',
+          unitPrice: row.dataset.unitPrice || '',
+          status: String(row.dataset.status || textFrom(row.children[6]) || '').toLowerCase().trim(),
+          expected: row.dataset.expected || ''
+        };
+        return acc;
+      }, {});
+      return;
+    }
+
+    poField.innerHTML = `<option value="">${noApprovedText}</option>`;
+    fetch('/purchase-orders/approved', {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(res => res.ok ? res.json() : Promise.reject()).then(data => {
+      if(!Array.isArray(data)) throw new Error('Invalid response');
+      if(!data.length){
+        poField.innerHTML = `<option value="">${noApprovedText}</option>`;
+        window.APPROVED_PO_CACHE = {};
+        return;
+      }
+      window.APPROVED_PO_CACHE = data.reduce((acc, item) => {
+        if(item.po_number){
+          acc[item.po_number] = {
+            po: item.po_number,
+            supplier: item.supplier_name || '—',
+            item: item.item || '',
+            qty: item.qty || '',
+            unitPrice: item.unit_price || '',
+            status: String(item.status || 'approved').toLowerCase().trim(),
+            expected: item.expected_delivery_date || ''
+          };
+        }
+        return acc;
+      }, {});
+      poField.innerHTML = '<option value="">Select PO...</option>' + data.map(po => {
+        const poNumber = htmlEscape(po.po_number || '');
+        return `<option value="${poNumber}"${poNumber === currentValue ? ' selected' : ''}>${poNumber}</option>`;
+      }).join('');
+    }).catch(() => {
+      poField.innerHTML = `<option value="">${noApprovedText}</option>`;
+    });
+  }
+
+  function getPoInfo(poNumber){
+    const trimmed = String(poNumber || '').trim();
+    if(!trimmed) return null;
+    const domRow = findPoRowByNumber(trimmed);
+    if(domRow){
+      return {
+        po: trimmed,
+        supplier: resolveSupplierByPO(trimmed) || '',
+        item: domRow.dataset.item || textFrom(domRow.children[2]) || '',
+        qty: domRow.dataset.qty || '',
+        unitPrice: domRow.dataset.unitPrice || '',
+        status: String(domRow.dataset.status || textFrom(domRow.children[6]) || '').toLowerCase().trim(),
+        expected: domRow.dataset.expected || ''
+      };
+    }
+    return window.APPROVED_PO_CACHE?.[trimmed] || null;
   }
 
   function bindDeliveryPoAutofill(modal){
@@ -211,19 +280,19 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     const update = () => {
       const poNumber = (poField?.value || '').trim();
       if(!poNumber) return;
-      const poRow = findPoRowByNumber(poNumber);
-      if(!poRow) return;
+      const poInfo = getPoInfo(poNumber);
+      if(!poInfo) return;
       if(supplierField){
-        supplierField.value = resolveSupplierByPO(poNumber) || '';
+        supplierField.value = poInfo.supplier || '';
       }
       if(itemField && !itemField.value){
-        itemField.value = poRow.dataset.item || textFrom(poRow.children[2]) || '';
+        itemField.value = poInfo.item || '';
       }
       if(qtyField && (!qtyField.value || Number(qtyField.value) === 0)){
-        qtyField.value = poRow.dataset.qty || '';
+        qtyField.value = poInfo.qty || '';
       }
       if(unitPriceField && (!unitPriceField.value || Number(unitPriceField.value) === 0)){
-        unitPriceField.value = poRow.dataset.unitPrice || '';
+        unitPriceField.value = poInfo.unitPrice || '';
       }
       if(amountField){
         const qty = Number(qtyField?.value || 0);
@@ -703,12 +772,12 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
   function submitAddDelivery(e){
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target).entries());
-    const poRow = findPoRowByNumber(d.po || '');
-    if(!poRow || (poRow.dataset.status || '').toLowerCase() !== 'approved'){
+    const poInfo = getPoInfo(d.po || '');
+    if(!poInfo || poInfo.status !== 'approved'){
       showToast('Only approved purchase orders can be logged in deliveries.', 'info');
       return;
     }
-    const expectedDate = poRow.dataset.expected || '';
+    const expectedDate = poInfo.expected || '';
     const isDelayed = Boolean(expectedDate && new Date(expectedDate) < new Date(todayISO()));
     const statusLabel = isDelayed ? 'Delayed' : 'In Transit';
     const stage = isDelayed ? '1' : '2';
@@ -728,6 +797,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       }).toString()
     }).then(res => res.json()).then(json => {
       const table = document.querySelector('#deliveries-table tbody');
+      const poRow = findPoRowByNumber(d.po || '');
       if(table){
         const tr = document.createElement('tr');
         tr.dataset.status = isDelayed ? 'delayed' : 'in-transit';
@@ -743,20 +813,24 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
           <td><a class="po-link">${d.dr}</a></td>
           <td><a class="po-link">${d.po}</a></td>
           <td>${supplierPill(d.supplier)}</td>
-          <td><div class="delivery-progress" data-stage="${stage}"><div class="step ${stage==='4'?'done':'active'}">${stage==='4'?'✓':''}</div><div class="line ${Number(stage)>0?'done':''}"></div><div class="step ${Number(stage)>1?'done':''}">${Number(stage)>1?'✓':''}</div><div class="line ${Number(stage)>2?'done':''}"></div><div class="step ${Number(stage)>2?'done':''}">${Number(stage)>2?'✓':''}</div><div class="line ${Number(stage)>3?'done':''}"></div><div class="step ${stage==='4'?'done':''}">${stage==='4'?'✓':''}</div></div></td>
+          <td>${htmlEscape(d.items || '—')}</td>
+          <td>${fmtDate(expectedDate)}</td>
           <td>${statusPill(statusLabel)}</td>
           <td>${fmtDate(d.delDate)}</td>
           <td><span class="row-actions"><button title="Track" onclick="openTrackModal(this)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button></span></td>`;
         if(json && (json.id || (json.data && json.data.id))) tr.dataset.id = json.id || json.data.id;
         table.prepend(tr);
       }
-      poRow.dataset.status = 'processing';
-      poRow.children[6].innerHTML = statusPill('Processing');
+      if(poRow){
+        poRow.dataset.status = 'processing';
+        poRow.children[6].innerHTML = statusPill('Processing');
+      }
       const reqRow = findReqRowByRef(d.po);
       if(reqRow){
         updateRowStatus(reqRow, 'In Transit');
         reqRow.children[6].innerHTML = statusPill('In Transit');
         reqRow.dataset.status = 'in-transit';
+        persistRequisitionStatus(reqRow, 'In Transit');
       }
       NEXT_ID.dr++;
       ID_COUNTS.dr++;
