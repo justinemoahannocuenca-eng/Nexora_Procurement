@@ -8,6 +8,51 @@ use Illuminate\Support\Facades\DB;
 class PurchaseOrderController extends Controller
 {
     /**
+     * Detect a unique-constraint violation (e.g. a duplicate po_number),
+     * regardless of which database driver raised it.
+     */
+    private function isDuplicateKeyException(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return str_contains($message, 'duplicate key')
+            || str_contains($message, 'Unique violation')
+            || str_contains($message, 'SQLSTATE[23505]')
+            || str_contains($message, 'UNIQUE constraint failed');
+    }
+
+    /**
+     * Insert the purchase order, automatically regenerating the po_number
+     * if it collides with one that already exists. This is what was making
+     * "Submit for Approval" silently fail: the browser pre-fills the PO
+     * number from an in-memory counter that resets on every page load, so
+     * once real PO numbers passed that counter, every new submission hit
+     * a duplicate po_number and the insert was rejected by the database.
+     */
+    private function insertPurchaseOrder(array $insert): int
+    {
+        $attempts = 0;
+        $currentInsert = $insert;
+
+        while ($attempts < 3) {
+            try {
+                return DB::table('purchase_orders')->insertGetId($currentInsert);
+            } catch (\Throwable $e) {
+                if ($this->isDuplicateKeyException($e)) {
+                    $suffix = now()->format('YmdHis') . '-' . random_int(1000, 9999);
+                    $currentInsert['po_number'] = $insert['po_number'] . '-' . $suffix;
+                    $attempts++;
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        throw new \RuntimeException('Unable to save purchase order after retrying.');
+    }
+
+    /**
      * Purchase Orders list page (filters, sortable table, add PO modal).
      */
     public function index(Request $request)
@@ -23,7 +68,15 @@ class PurchaseOrderController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return view('pages.purchase-orders', compact('purchaseOrders', 'suppliers'));
+        $statusCounts = DB::table('purchase_orders')
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->mapWithKeys(function ($total, $status) {
+                return [strtolower(str_replace([' ', '_'], '-', $status ?? 'pending')) => $total];
+            });
+
+        return view('pages.purchase-orders', compact('purchaseOrders', 'suppliers', 'statusCounts'));
     }
 
     public function approved(Request $request)
@@ -76,7 +129,7 @@ class PurchaseOrderController extends Controller
             ]);
         }
 
-        $poId = DB::table('purchase_orders')->insertGetId([
+        $insert = [
             'po_number' => $validated['po'],
             'supplier_id' => $supplierId,
             'qty' => (int) ($validated['qty'] ?? 1),
@@ -93,7 +146,10 @@ class PurchaseOrderController extends Controller
             'requisition_reference' => $validated['reqRef'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        $poId = $this->insertPurchaseOrder($insert);
+        $savedPoNumber = DB::table('purchase_orders')->where('id', $poId)->value('po_number');
 
         DB::table('purchase_order_items')->insert([
             'purchase_order_id' => $poId,
@@ -106,7 +162,9 @@ class PurchaseOrderController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json(['status' => 'ok', 'data' => $validated, 'id' => $poId]);
+        $validated['po'] = $savedPoNumber;
+
+        return response()->json(['status' => 'ok', 'data' => $validated, 'id' => $poId, 'po_number' => $savedPoNumber]);
     }
 
     public function update(Request $request, $purchaseOrder)

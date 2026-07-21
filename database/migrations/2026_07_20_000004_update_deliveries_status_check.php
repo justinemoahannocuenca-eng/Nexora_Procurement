@@ -11,7 +11,7 @@ return new class extends Migration
     public function up(): void
     {
         DB::statement('ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS deliveries_status_check');
-        DB::statement("ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'scheduled', 'in-transit', 'delivered', 'delayed', 'cancelled', 'completed'))");
+        DB::statement("ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'scheduled', 'intransit', 'delivered', 'delayed', 'cancelled', 'completed'))");
     }
 
     /**
@@ -20,6 +20,6 @@ return new class extends Migration
     public function down(): void
     {
         DB::statement('ALTER TABLE deliveries DROP CONSTRAINT IF EXISTS deliveries_status_check');
-        DB::statement("ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'scheduled', 'in-transit', 'delivered', 'delayed', 'cancelled'))");
+        DB::statement("ALTER TABLE deliveries ADD CONSTRAINT deliveries_status_check CHECK (status IN ('pending', 'scheduled', 'intransit', 'delivered', 'delayed', 'cancelled'))");
     }
 };

@@ -8,6 +8,50 @@ use Illuminate\Support\Facades\DB;
 class DeliveryController extends Controller
 {
     /**
+     * Detect a unique-constraint violation (e.g. a duplicate shipment_number),
+     * regardless of which database driver raised it.
+     */
+    private function isDuplicateKeyException(\Throwable $e): bool
+    {
+        $message = $e->getMessage();
+
+        return str_contains($message, 'duplicate key')
+            || str_contains($message, 'Unique violation')
+            || str_contains($message, 'SQLSTATE[23505]')
+            || str_contains($message, 'UNIQUE constraint failed');
+    }
+
+    /**
+     * Insert the delivery, automatically regenerating the shipment_number
+     * if it collides with one that already exists (same root cause as the
+     * PO submit issue: the browser's shipment-number counter resets on
+     * every page load, so once real shipments passed it, "Log Delivery"
+     * failed silently on a duplicate shipment_number).
+     */
+    private function insertDelivery(array $insert): int
+    {
+        $attempts = 0;
+        $currentInsert = $insert;
+
+        while ($attempts < 3) {
+            try {
+                return DB::table('deliveries')->insertGetId($currentInsert);
+            } catch (\Throwable $e) {
+                if ($this->isDuplicateKeyException($e)) {
+                    $suffix = now()->format('YmdHis') . '-' . random_int(1000, 9999);
+                    $currentInsert['shipment_number'] = $insert['shipment_number'] . '-' . $suffix;
+                    $attempts++;
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        throw new \RuntimeException('Unable to save delivery after retrying.');
+    }
+
+    /**
      * Deliveries tracking page (filters, sortable table, tracking modal).
      */
     public function index(Request $request)
@@ -20,7 +64,15 @@ class DeliveryController extends Controller
             ->limit(8)
             ->get();
 
-        return view('pages.deliveries', compact('deliveries'));
+        $statusCounts = DB::table('deliveries')
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->mapWithKeys(function ($total, $status) {
+                return [strtolower(str_replace([' ', '_'], '-', $status ?? 'intransit')) => $total];
+            });
+
+        return view('pages.deliveries', compact('deliveries', 'statusCounts'));
     }
 
     /**
@@ -42,11 +94,20 @@ class DeliveryController extends Controller
         $purchaseOrder = DB::table('purchase_orders')->where('po_number', $validated['po'])->first();
         $supplier = DB::table('suppliers')->where('name', $validated['supplier'])->first();
 
-        $deliveryId = DB::table('deliveries')->insertGetId([
+        // Business rule: a PO can only be logged in Deliveries once Finance
+        // has approved it (pending/rejected/cancelled POs are not allowed).
+        if (! $purchaseOrder || strtolower(trim($purchaseOrder->status ?? '')) !== 'approved') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Only approved purchase orders can be logged in deliveries.',
+            ], 422);
+        }
+
+        $insert = [
             'shipment_number' => $validated['dr'],
-            'purchase_order_id' => $purchaseOrder?->id ?? null,
+            'purchase_order_id' => $purchaseOrder->id,
             'supplier_id' => $supplier?->id ?? null,
-            'status' => in_array(strtolower($validated['status']), ['in-transit','delivered','delayed','scheduled','pending','cancelled','completed']) ? strtolower($validated['status']) : 'in-transit',
+            'status' => in_array(strtolower($validated['status']), ['intransit','delivered','delayed','scheduled','pending','cancelled','completed']) ? strtolower($validated['status']) : 'intransit',
             'qty' => $validated['qty'] ?? null,
             'qty_expected' => $validated['qty'] ?? null,
             'items' => $validated['items'] ?? null,
@@ -55,15 +116,26 @@ class DeliveryController extends Controller
             'estimated_arrival' => $validated['delDate'],
             'created_at' => now(),
             'updated_at' => now(),
+        ];
+
+        $deliveryId = $this->insertDelivery($insert);
+
+        // Logging a delivery moves the PO into Processing.
+        DB::table('purchase_orders')->where('id', $purchaseOrder->id)->update([
+            'status' => 'processing',
+            'updated_at' => now(),
         ]);
 
-        return response()->json(['status' => 'ok', 'data' => $validated, 'id' => $deliveryId]);
+        $savedShipmentNumber = DB::table('deliveries')->where('id', $deliveryId)->value('shipment_number');
+        $validated['dr'] = $savedShipmentNumber;
+
+        return response()->json(['status' => 'ok', 'data' => $validated, 'id' => $deliveryId, 'shipment_number' => $savedShipmentNumber]);
     }
 
     public function update(Request $request, $delivery)
     {
         $validated = $request->validate([
-            'status' => 'nullable|string|in:pending,scheduled,in-transit,delivered,delayed,cancelled,completed',
+            'status' => 'nullable|string|in:pending,scheduled,intransit,delivered,delayed,cancelled,completed',
             'remarks' => 'nullable|string',
         ]);
 

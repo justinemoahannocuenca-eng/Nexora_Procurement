@@ -24,9 +24,9 @@
           <div class="status-label">Processing</div>
           <div class="status-count">{{ $statusCounts->get('processing', 0) }}</div>
         </div>
-        <div class="status-chart-item in-transit" data-status="in-transit" style="background:linear-gradient(135deg,#e1bee7,#ce93d8);border-color:#9c27b0;" onclick="filterByStatus('requisitions-table', 'in-transit', this)">
-          <div class="status-label">In Transit</div>
-          <div class="status-count">{{ $statusCounts->get('in-transit', 0) }}</div>
+        <div class="status-chart-item intransit" data-status="intransit" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-color:#2196f3;" onclick="filterByStatus('requisitions-table', 'intransit', this)">
+          <div class="status-label">intransit</div>
+          <div class="status-count">{{ $statusCounts->get('intransit', 0) }}</div>
         </div>
         <div class="status-chart-item delivered" data-status="delivered" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-color:#4caf50;" onclick="filterByStatus('requisitions-table', 'delivered', this)">
           <div class="status-label">Delivered</div>
@@ -36,7 +36,7 @@
           <div class="status-label">Completed</div>
           <div class="status-count">{{ $statusCounts->get('completed', 0) }}</div>
         </div>
-        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#ffebee,#ffcdd2);border-color:#f44336;" onclick="filterByStatus('requisitions-table', 'cancelled', this)">
+        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#f1f3f6,#e2e6ee);border-color:#7c88a3;" onclick="filterByStatus('requisitions-table', 'cancelled', this)">
           <div class="status-label">Cancelled</div>
           <div class="status-count">{{ $statusCounts->get('cancelled', 0) }}</div>
         </div>
@@ -61,9 +61,10 @@
               <option value="">All Status</option>
               <option value="pending">Pending</option>
               <option value="processing">Processing</option>
-              <option value="in-transit">In Transit</option>
+              <option value="intransit">intransit</option>
               <option value="delivered">Delivered</option>
               <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div class="filter-group">

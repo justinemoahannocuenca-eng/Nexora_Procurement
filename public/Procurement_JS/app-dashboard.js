@@ -134,3 +134,97 @@
     }, 900);
   }
 
+  /* ---------- Dashboard entrance animations ---------- */
+  function animateDashboard(){
+    // Animate stat cards with staggered delay
+    const statCards = document.querySelectorAll('.stat-card');
+    statCards.forEach((card, i) => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(15px)';
+      card.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+      setTimeout(() => {
+        card.style.opacity = '1';
+        card.style.transform = 'translateY(0)';
+      }, 100 + (i * 80));
+    });
+    
+    // Animate panels with staggered delay
+    const panels = document.querySelectorAll('.dash-grid-3 .panel');
+    panels.forEach((panel, i) => {
+      panel.style.opacity = '0';
+      panel.style.transform = 'translateY(20px)';
+      panel.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+      setTimeout(() => {
+        panel.style.opacity = '1';
+        panel.style.transform = 'translateY(0)';
+      }, 200 + (i * 120));
+    });
+    
+    // Animate chart bars (spend by brand)
+    const chartBars = document.querySelectorAll('.chart-bar-fill');
+    chartBars.forEach((bar, i) => {
+      const width = bar.style.width;
+      bar.style.width = '0';
+      setTimeout(() => {
+        bar.style.width = width;
+      }, 400 + (i * 60));
+    });
+    
+    // Animate supplier items
+    const supplierItems = document.querySelectorAll('.supplier-item');
+    supplierItems.forEach((item, i) => {
+      item.style.opacity = '0';
+      item.style.transform = 'translateX(-10px)';
+      item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      setTimeout(() => {
+        item.style.opacity = '1';
+        item.style.transform = 'translateX(0)';
+      }, 300 + (i * 50));
+    });
+    
+    // Initialize donut if canvas exists
+    const donutCanvas = document.getElementById('dash-donut');
+    if (donutCanvas && window.dashboardData && window.dashboardData.poStatus) {
+      initDonutFromData(donutCanvas, window.dashboardData.poStatus);
+    }
+  }
+  
+  /* ---------- Donut chart from data ---------- */
+  function initDonutFromData(canvas, statusData){
+    if (!canvas || !statusData || Object.keys(statusData).length === 0) return;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = 70;
+    const lineWidth = 22;
+    
+    const colors = {
+      pending: '#f2994a',
+      processing: '#2f6fed',
+      approved: '#1fa971',
+      rejected: '#eb5757',
+      cancelled: '#7c88a3',
+      completed: '#14b8a6'
+    };
+    
+    const total = Object.values(statusData).reduce((sum, val) => sum + val, 0);
+    let startAngle = -Math.PI / 2;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    Object.entries(statusData).forEach(([status, count]) => {
+      const sliceAngle = (count / total) * 2 * Math.PI;
+      const endAngle = startAngle + sliceAngle;
+      
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.strokeStyle = colors[status] || '#ccc';
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'butt';
+      ctx.stroke();
+      
+      startAngle = endAngle;
+    });
+  }
+

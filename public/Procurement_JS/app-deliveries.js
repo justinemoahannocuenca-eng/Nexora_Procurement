@@ -26,7 +26,7 @@
     if (currentStatus === 'delivered') {
       markReceivedBtn.style.display = 'none';
       markCompletedBtn.style.display = 'block';
-    } else if (currentStatus === 'in-transit' || currentStatus === 'delayed') {
+    } else if (currentStatus === 'intransit' || currentStatus === 'delayed') {
       markReceivedBtn.style.display = 'block';
       markCompletedBtn.style.display = 'none';
     } else {

@@ -39,7 +39,7 @@
   function updateStatusCounts(){
     // Update requisition status counts
     const reqRows = document.querySelectorAll('#requisitions-table tbody tr');
-    const reqCounts = {pending:0, processing:0, 'in-transit':0, delivered:0, completed:0};
+    const reqCounts = {pending:0, processing:0, 'intransit':0, delivered:0, completed:0, cancelled:0};
     reqRows.forEach(row => {
       const s = row.dataset.status;
       if(reqCounts[s] !== undefined) reqCounts[s]++;
@@ -63,7 +63,7 @@
     
     // Update delivery status counts
     const delRows = document.querySelectorAll('#deliveries-table tbody tr');
-    const delCounts = {'in-transit':0, delayed:0, delivered:0, completed:0};
+    const delCounts = {pending:0, scheduled:0, 'intransit':0, delayed:0, delivered:0, completed:0, cancelled:0};
     delRows.forEach(row => {
       const s = row.dataset.status;
       if(delCounts[s] !== undefined) delCounts[s]++;

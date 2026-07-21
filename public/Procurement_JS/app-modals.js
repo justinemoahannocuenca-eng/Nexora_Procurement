@@ -34,7 +34,7 @@
   }
   function statusPill(status){
     const raw = String(status || 'Pending');
-    const clsMap = {'Approved':'approved','Pending':'pending','Processing':'processing','Rejected':'rejected','Completed':'completed','Paid':'paid','Unpaid':'unpaid','In Transit':'intransit','Delivered':'delivered','Delayed':'delayed','Scheduled':'scheduled','Active':'approved','Inactive':'pending','Blacklisted':'rejected'};
+    const clsMap = {'Approved':'approved','Pending':'pending','Processing':'processing','Rejected':'rejected','Completed':'completed','Paid':'paid','Unpaid':'unpaid','intransit':'intransit','Delivered':'delivered','Delayed':'delayed','Scheduled':'scheduled','Active':'approved','Inactive':'pending','Blacklisted':'rejected'};
     const cls = clsMap[raw] || raw.toLowerCase().replace(/\s+/g,'');
     return `<span class="status-pill ${cls}">${htmlEscape(raw)}</span>`;
   }
@@ -291,7 +291,7 @@
       <div class="form-field"><label>Quantity</label><input type="number" min="0" name="qty" value="${record.qty}"></div>
       <div class="form-field"><label>Total amount</label><input type="number" min="0" step="0.01" name="amount" value="${record.amount}"></div>
       <div class="form-field"><label>Priority</label><select name="priority"><option ${record.priority==='Urgent'?'selected':''}>Urgent</option><option ${record.priority==='High'?'selected':''}>High</option><option ${record.priority==='Normal' || !record.priority?'selected':''}>Normal</option><option ${record.priority==='Low'?'selected':''}>Low</option></select></div>
-      <div class="form-field"><label>Delivery status</label><select name="delivery"><option ${record.delivery==='Scheduled'?'selected':''}>Scheduled</option><option ${record.delivery==='In Transit'?'selected':''}>In Transit</option><option ${record.delivery==='Delivered'?'selected':''}>Delivered</option><option ${record.delivery==='Delayed'?'selected':''}>Delayed</option></select></div>
+      <div class="form-field"><label>Delivery status</label><select name="delivery"><option ${record.delivery==='Scheduled'?'selected':''}>Scheduled</option><option ${record.delivery==='intransit'?'selected':''}>intransit</option><option ${record.delivery==='Delivered'?'selected':''}>Delivered</option><option ${record.delivery==='Delayed'?'selected':''}>Delayed</option></select></div>
       <div class="form-field"><label>Status</label><select name="status"><option ${record.status==='Pending'?'selected':''}>Pending</option><option ${record.status==='Approved'?'selected':''}>Approved</option><option ${record.status==='Rejected'?'selected':''}>Rejected</option><option ${record.status==='Completed'?'selected':''}>Completed</option></select></div>
       <div class="form-field"><label>Date</label><input name="date" value="${htmlEscape(record.date)}"></div>
       <div class="form-field"><label>Time</label><input name="time" value="${htmlEscape(record.time)}"></div>
@@ -312,7 +312,7 @@
       <div class="form-field"><label>Item</label><input name="item" value="${htmlEscape(record.item)}"></div>
       <div class="form-field"><label>Quantity</label><input type="number" min="0" name="qty" value="${record.qty}"></div>
       <div class="form-field"><label>Unit</label><input name="uom" value="${htmlEscape(record.uom)}"></div>
-      <div class="form-field"><label>Delivery status</label><select name="delivery"><option ${record.delivery==='Scheduled'?'selected':''}>Scheduled</option><option ${record.delivery==='In Transit'?'selected':''}>In Transit</option><option ${record.delivery==='Delivered'?'selected':''}>Delivered</option><option ${record.delivery==='Delayed'?'selected':''}>Delayed</option></select></div>
+      <div class="form-field"><label>Delivery status</label><select name="delivery"><option ${record.delivery==='Scheduled'?'selected':''}>Scheduled</option><option ${record.delivery==='intransit'?'selected':''}>intransit</option><option ${record.delivery==='Delivered'?'selected':''}>Delivered</option><option ${record.delivery==='Delayed'?'selected':''}>Delayed</option></select></div>
       <div class="form-field"><label>Status</label><select name="status"><option ${record.status==='Pending'?'selected':''}>Pending</option><option ${record.status==='Approved'?'selected':''}>Approved</option><option ${record.status==='Rejected'?'selected':''}>Rejected</option></select></div>
       <div class="form-field"><label>Date</label><input name="date" value="${htmlEscape(record.date)}"></div>
       <div class="form-field"><label>Time</label><input name="time" value="${htmlEscape(record.time)}"></div>
@@ -332,7 +332,7 @@
       <div class="form-field"><label>PO number</label><input name="po" value="${htmlEscape(record.po)}"></div>
       <div class="form-field"><label>Supplier</label><input name="supplier" value="${htmlEscape(record.supplier)}"></div>
       <div class="form-field"><label>Carrier</label><input name="carrier" value="${htmlEscape(record.carrier)}"></div>
-      <div class="form-field"><label>Status</label><select name="status"><option ${record.status==='Scheduled'?'selected':''}>Scheduled</option><option ${record.status==='In Transit'?'selected':''}>In Transit</option><option ${record.status==='Delayed'?'selected':''}>Delayed</option><option ${record.status==='Delivered'?'selected':''}>Delivered</option></select></div>
+      <div class="form-field"><label>Status</label><select name="status"><option ${record.status==='Scheduled'?'selected':''}>Scheduled</option><option ${record.status==='intransit'?'selected':''}>intransit</option><option ${record.status==='Delayed'?'selected':''}>Delayed</option><option ${record.status==='Delivered'?'selected':''}>Delivered</option></select></div>
       <div class="form-field"><label>Date</label><input name="date" value="${htmlEscape(record.date)}"></div>
       <div class="form-field full"><label>Tracking note</label><textarea name="note">${htmlEscape(record.note)}</textarea></div>`;
     return '';
@@ -461,7 +461,7 @@
       row.dataset.carrier = d.carrier || '';
       row.dataset.note = d.note || '';
       row.dataset.date = d.date || '';
-      row.dataset.stage = ({'Scheduled':'0','In Transit':'2','Delayed':'1','Delivered':'4'})[d.status] || '0';
+      row.dataset.stage = ({'Scheduled':'0','intransit':'2','Delayed':'1','Delivered':'4'})[d.status] || '0';
       row.children[1].innerHTML = `<a class="po-link">${htmlEscape(d.po)}</a>`;
       row.children[2].innerHTML = supplierPill(d.supplier);
       row.children[4].innerHTML = statusPill(d.status);

@@ -4,31 +4,48 @@
 
 @section('content')
 <section id="page-deliveries">
+      @php
+        $statusCounts = $statusCounts ?? collect($deliveries)->map(function ($d) {
+            return strtolower(str_replace([' ', '_'], '-', $d->status ?? 'intransit'));
+        })->countBy();
+      @endphp
+
       <div class="page-head">
         <h1>Deliveries</h1>
         <p>Track incoming shipments from suppliers in real time.</p>
       </div>
 
       <div class="status-chart" id="delivery-status-chart">
-        <div class="status-chart-item in-transit" data-status="in-transit" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-color:#2196f3;" onclick="filterByStatus('deliveries-table', 'in-transit', this)">
-          <div class="status-label">In Transit</div>
-          <div class="status-count">0</div>
+        <div class="status-chart-item pending" data-status="pending" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border-color:#ff9800;" onclick="filterByStatus('deliveries-table', 'pending', this)">
+          <div class="status-label">Pending</div>
+          <div class="status-count">{{ $statusCounts->get('pending', 0) }}</div>
+        </div>
+        <div class="status-chart-item scheduled" data-status="scheduled" style="background:linear-gradient(135deg,#f0eaff,#dcd0fb);border-color:#7a5af0;" onclick="filterByStatus('deliveries-table', 'scheduled', this)">
+          <div class="status-label">Scheduled</div>
+          <div class="status-count">{{ $statusCounts->get('scheduled', 0) }}</div>
+        </div>
+        <div class="status-chart-item intransit" data-status="intransit" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-color:#2196f3;" onclick="filterByStatus('deliveries-table', 'intransit', this)">
+          <div class="status-label">intransit</div>
+          <div class="status-count">{{ $statusCounts->get('intransit', 0) }}</div>
             <div class="stat-sub info">● Live tracking</div>
         </div>
         <div class="status-chart-item delayed" data-status="delayed" style="background:linear-gradient(135deg,#ffebee,#ffcdd2);border-color:#f44336;" onclick="filterByStatus('deliveries-table', 'delayed', this)">
           <div class="status-label">Delayed</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('delayed', 0) }}</div>
 
           <div class="stat-sub" style="color:var(--red);">● Needs attention</div>
         </div>
         <div class="status-chart-item delivered" data-status="delivered" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-color:#4caf50;" onclick="filterByStatus('deliveries-table', 'delivered', this)">
           <div class="status-label">Delivered</div>
-          <div class="status-count">0</div>
-           <div class="stat-sub up">↑ 3 vs last week</div>
+          <div class="status-count">{{ $statusCounts->get('delivered', 0) }}</div>
         </div>
         <div class="status-chart-item completed" data-status="completed" style="background:linear-gradient(135deg,#e0f2f1,#b2dfdb);border-color:#009688;" onclick="filterByStatus('deliveries-table', 'completed', this)">
           <div class="status-label">Completed</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('completed', 0) }}</div>
+        </div>
+        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#f1f3f6,#e2e6ee);border-color:#7c88a3;" onclick="filterByStatus('deliveries-table', 'cancelled', this)">
+          <div class="status-label">Cancelled</div>
+          <div class="status-count">{{ $statusCounts->get('cancelled', 0) }}</div>
         </div>
       </div>
       
@@ -51,10 +68,13 @@
             <label>Status</label>
             <select id="delivery-filter-status" onchange="applyDelFilter()">
               <option value="">All Status</option>
-              <option value="in-transit">In Transit</option>
+              <option value="pending">Pending</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="intransit">intransit</option>
               <option value="delayed">Delayed</option>
               <option value="delivered">Delivered</option>
               <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
           </div>
           <div class="filter-group">
@@ -111,13 +131,13 @@
                       $badgeColor = $colors[$h % count($colors)];
                     }
                   @endphp
-                  <tr data-id="{{ $d->id }}" data-po="{{ $d->po_number ?? '' }}" data-sup="{{ $d->supplier_name ?? '' }}" data-stage="{{ $d->stage ?? '' }}" data-status="{{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'in-transit')) }}" data-date="{{ $d->delivery_date ?? '' }}">
+                  <tr data-id="{{ $d->id }}" data-po="{{ $d->po_number ?? '' }}" data-sup="{{ $d->supplier_name ?? '' }}" data-stage="{{ $d->stage ?? '' }}" data-status="{{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'intransit')) }}" data-date="{{ $d->delivery_date ?? '' }}">
                     <td><a class="po-link">{{ $d->shipment_number }}</a></td>
                     <td><a class="po-link">{{ $d->po_number ?? '—' }}</a></td>
                     <td><div class="supplier-pill-cell"><span class="supplier-pill"><span class="supplier-badge" style="background: {{ $badgeColor }}">{{ $initials }}</span>{{ $d->supplier_name ?? '—' }}</span></div></td>
                     <td>{{ $d->items ?? '—' }}</td>
                     <td>{{ $d->estimated_arrival ?? $d->delivery_date ?? '' }}</td>
-                    <td><span class="status-pill {{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'in-transit')) }}">{{ ucwords(str_replace('-', ' ', $d->status ?? 'in-transit')) }}</span></td>
+                    <td><span class="status-pill {{ strtolower(str_replace([' ', '_'], '-', $d->status ?? 'intransit')) }}">{{ ucwords(str_replace('-', ' ', $d->status ?? 'intransit')) }}</span></td>
                     <td>{{ $d->delivery_date ?? '' }}</td>
                     <td><span class="row-actions"><button title="Track">🔎</button></span></td>
                   </tr>

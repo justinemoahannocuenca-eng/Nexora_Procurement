@@ -1,0 +1,101 @@
+﻿<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class DashboardController extends Controller
+{
+    /**
+     * Show the procurement dashboard (stat cards, category chart,
+     * PO status donut, and recent deliveries preview).
+     */
+    public function index(Request )
+    {
+         = DB::table('purchase_orders')->count();
+         = DB::table('purchase_orders')
+            ->select('status', DB::raw('count(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+         = DB::table('suppliers')
+            ->where('status', 'active')
+            ->count();
+
+         = 0;
+        try {
+             = DB::connection('orderfullfillment');
+            if (->getSchemaBuilder()->hasTable('requisitions')) {
+                 = ->table('requisitions')->count();
+            }
+        } catch (\Exception ) {
+             = 0;
+        }
+
+         = DB::table('deliveries')->count();
+         = DB::table('deliveries')
+            ->whereIn('status', ['pending', 'scheduled', 'intransit'])
+            ->count();
+
+         = DB::table('purchase_orders')
+            ->select('id', 'po_number', 'supplier_id', 'qty', 'amount', 'status', 'priority', 'order_date', 'expected_delivery_date', 'item', 'brand')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+         = ->pluck('supplier_id')->filter()->unique()->toArray();
+         = [];
+        if (!empty()) {
+             = DB::table('suppliers')
+                ->whereIn('id', )
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
+         = DB::table('deliveries')
+            ->select('id', 'shipment_number', 'purchase_order_id', 'supplier_id', 'status', 'delivery_date', 'estimated_arrival', 'actual_arrival', 'carrier')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+         = ->pluck('supplier_id')->filter()->unique()->toArray();
+         = [];
+        if (!empty()) {
+             = DB::table('suppliers')
+                ->whereIn('id', )
+                ->pluck('name', 'id')
+                ->toArray();
+        }
+
+         = DB::table('purchase_orders')
+            ->select('brand', DB::raw('SUM(amount) as total'))
+            ->whereNotNull('brand')
+            ->where('brand', '!=', '')
+            ->groupBy('brand')
+            ->orderByDesc('total')
+            ->limit(10)
+            ->get();
+
+         = DB::table('purchase_orders')
+            ->where('status', '!=', 'cancelled')
+            ->where('status', '!=', 'rejected')
+            ->sum('amount');
+
+        return view('pages.dashboard', [
+            'poCount' => ,
+            'poStatusBreakdown' => ,
+            'supplierCount' => ,
+            'requisitionCount' => ,
+            'deliveryCount' => ,
+            'pendingDeliveries' => ,
+            'recentPOs' => ,
+            'suppliersMap' => ,
+            'recentDeliveries' => ,
+            'deliverySuppliersMap' => ,
+            'spendByBrand' => ,
+            'totalSpend' => ,
+        ]);
+    }
+}

@@ -4,6 +4,12 @@
 
 @section('content')
 <section id="page-purchase-orders">
+      @php
+        $statusCounts = $statusCounts ?? collect($purchaseOrders)->map(function ($po) {
+            return strtolower(str_replace([' ', '_'], '-', $po->status ?? 'pending'));
+        })->countBy();
+      @endphp
+
       <div class="page-head">
         <h1>Purchase Orders</h1>
         <p>All purchase orders for Techforge PC Solutions</p>
@@ -12,27 +18,27 @@
       <div class="status-chart" id="po-status-chart">
         <div class="status-chart-item pending" data-status="pending" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border-color:#ff9800;" onclick="filterByStatus('po-table', 'pending', this)">
           <div class="status-label">Pending</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('pending', 0) }}</div>
         </div>
         <div class="status-chart-item approved" data-status="approved" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);border-color:#4caf50;" onclick="filterByStatus('po-table', 'approved', this)">
           <div class="status-label">Approved</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('approved', 0) }}</div>
         </div>
         <div class="status-chart-item rejected" data-status="rejected" style="background:linear-gradient(135deg,#ffebee,#ffcdd2);border-color:#f44336;" onclick="filterByStatus('po-table', 'rejected', this)">
           <div class="status-label">Rejected</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('rejected', 0) }}</div>
         </div>
-        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#ffebee,#ffcdd2);border-color:#f44336;" onclick="filterByStatus('po-table', 'cancelled', this)">
+        <div class="status-chart-item cancelled" data-status="cancelled" style="background:linear-gradient(135deg,#f1f3f6,#e2e6ee);border-color:#7c88a3;" onclick="filterByStatus('po-table', 'cancelled', this)">
           <div class="status-label">Cancelled</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('cancelled', 0) }}</div>
         </div>
         <div class="status-chart-item processing" data-status="processing" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);border-color:#2196f3;" onclick="filterByStatus('po-table', 'processing', this)">
           <div class="status-label">Processing</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('processing', 0) }}</div>
         </div>
         <div class="status-chart-item completed" data-status="completed" style="background:linear-gradient(135deg,#e0f2f1,#b2dfdb);border-color:#009688;" onclick="filterByStatus('po-table', 'completed', this)">
           <div class="status-label">Completed</div>
-          <div class="status-count">0</div>
+          <div class="status-count">{{ $statusCounts->get('completed', 0) }}</div>
         </div>
       </div>
 
@@ -55,10 +61,12 @@
             <label>Status</label>
             <select id="po-filter-status" onchange="applyPOFilter()">
               <option value="">All Status</option>
-              <option value="approved">Approved</option>
               <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
-              <option value="draft">Draft</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
           <div class="filter-group">

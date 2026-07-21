@@ -83,49 +83,6 @@ class DashboardController extends Controller
             ->where('status', '!=', 'rejected')
             ->sum('amount');
 
-        // Top suppliers by total PO spend — grouped/summed per supplier so the
-        // same supplier never appears twice (previously missing entirely, which
-        // is why the "Top Suppliers" panel always showed "No top suppliers to
-        // display" no matter how much data was in the database).
-        $topSuppliers = DB::table('purchase_orders')
-            ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
-            ->select('suppliers.id', 'suppliers.name', DB::raw('SUM(purchase_orders.amount) as total_spend'))
-            ->where('purchase_orders.status', '!=', 'cancelled')
-            ->where('purchase_orders.status', '!=', 'rejected')
-            ->groupBy('suppliers.id', 'suppliers.name')
-            ->orderByDesc('total_spend')
-            ->limit(5)
-            ->get()
-            ->map(function ($supplier) {
-                $supplier->formatted_total_spend = $supplier->total_spend >= 1000
-                    ? '₱' . number_format($supplier->total_spend / 1000, 1) . 'k'
-                    : '₱' . number_format($supplier->total_spend, 2);
-                return $supplier;
-            });
-
-        $totalSpendFormatted = '₱' . number_format($totalSpend, 2);
-
-        $spendByBrand = $spendByBrand->map(function ($item) {
-            $item->formatted_total = $item->total >= 1000
-                ? '₱' . number_format($item->total / 1000, 1) . 'k'
-                : '₱' . number_format($item->total, 2);
-            return $item;
-        });
-
-        // Low stock alerts — populated by `php artisan inventory:check-low-stock`
-        // (scheduled hourly). Previously nothing on the dashboard ever read
-        // this table, so there was no way to tell if the check was working.
-        $lowStockAlerts = collect();
-        try {
-            $lowStockAlerts = DB::table('low_stock_alerts')
-                ->orderBy('stock', 'asc')
-                ->orderBy('updated_at', 'desc')
-                ->limit(10)
-                ->get();
-        } catch (\Exception $e) {
-            $lowStockAlerts = collect();
-        }
-
         return view('pages.dashboard', [
             'poCount' => $poCount,
             'poStatusBreakdown' => $poStatusBreakdown,
@@ -139,9 +96,6 @@ class DashboardController extends Controller
             'deliverySuppliersMap' => $deliverySuppliersMap,
             'spendByBrand' => $spendByBrand,
             'totalSpend' => $totalSpend,
-            'totalSpendFormatted' => $totalSpendFormatted,
-            'topSuppliers' => $topSuppliers,
-            'lowStockAlerts' => $lowStockAlerts,
         ]);
     }
 }

@@ -337,22 +337,17 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       setModalFieldValue(modal, 'expected', exp.toISOString().slice(0,10));
       refreshPoSupplierOptions(modal);
       
-      // Auto-fill from requisition data
+      // Auto-fill from requisition data — only the Qty (and the reference
+      // number) should carry over. Item/Brand/Supplier are chosen by the
+      // person creating the PO, not copied from the request.
       if(reqData){
         if(reqData.reqNum) setModalFieldValue(modal, 'reqRef', reqData.reqNum);
         if(reqData.qty) setModalFieldValue(modal, 'qty', reqData.qty);
-        if(reqData.item) setModalFieldValue(modal, 'item', reqData.item);
-        if(reqData.brand) setModalFieldValue(modal, 'brand', reqData.brand);
-        if(reqData.supplier) setModalFieldValue(modal, 'supplier', reqData.supplier);
       }
       setTimeout(() => {
         const poForm = modal.querySelector('#add-po-form');
         // wait for supplier options/catalog to be ready before populating items
         refreshPoSupplierOptions(modal).then(() => {
-          if(poForm && reqData?.item){
-            populatePoItemSelect(poForm, reqData.item);
-            poForm.__poCurrentItem = reqData.item;
-          }
           applyPoAutofill(poForm);
         });
       }, 60);
@@ -595,7 +590,12 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
         remarks: d.remarks || '',
         reqRef: d.reqRef || ''
       }).toString()
-    }).then(res => res.json()).then(json => {
+    }).then(res => res.json().then(json => ({ ok: res.ok, json }))).then(({ ok, json }) => {
+      if(!ok){
+        showToast(json?.message || 'Unable to save purchase order right now.', 'no');
+        return;
+      }
+      if(json && json.po_number) d.po = json.po_number;
       const table = document.querySelector('#po-table tbody');
       if(table){
         const tr = document.createElement('tr');
@@ -779,7 +779,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     }
     const expectedDate = poInfo.expected || '';
     const isDelayed = Boolean(expectedDate && new Date(expectedDate) < new Date(todayISO()));
-    const statusLabel = isDelayed ? 'Delayed' : 'In Transit';
+    const statusLabel = isDelayed ? 'Delayed' : 'intransit';
     const stage = isDelayed ? '1' : '2';
 
     fetch('/deliveries', {
@@ -795,12 +795,16 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
         status: statusLabel,
         remarks: d.remarks || ''
       }).toString()
-    }).then(res => res.json()).then(json => {
+    }).then(res => res.json().then(json => ({ ok: res.ok, json }))).then(({ ok, json }) => {
+      if(!ok){
+        showToast(json?.message || 'Only approved purchase orders can be logged in deliveries.', 'info');
+        return;
+      }
       const table = document.querySelector('#deliveries-table tbody');
       const poRow = findPoRowByNumber(d.po || '');
       if(table){
         const tr = document.createElement('tr');
-        tr.dataset.status = isDelayed ? 'delayed' : 'in-transit';
+        tr.dataset.status = isDelayed ? 'delayed' : 'intransit';
         tr.dataset.date = d.delDate;
         tr.dataset.ship = d.dr;
         tr.dataset.po = d.po;
@@ -827,10 +831,10 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       }
       const reqRow = findReqRowByRef(d.po);
       if(reqRow){
-        updateRowStatus(reqRow, 'In Transit');
-        reqRow.children[6].innerHTML = statusPill('In Transit');
-        reqRow.dataset.status = 'in-transit';
-        persistRequisitionStatus(reqRow, 'In Transit');
+        updateRowStatus(reqRow, 'intransit');
+        reqRow.children[6].innerHTML = statusPill('intransit');
+        reqRow.dataset.status = 'intransit';
+        persistRequisitionStatus(reqRow, 'intransit');
       }
       NEXT_ID.dr++;
       ID_COUNTS.dr++;
