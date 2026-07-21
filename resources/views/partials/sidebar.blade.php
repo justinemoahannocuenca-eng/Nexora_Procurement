@@ -4,32 +4,17 @@
       <div style="position:relative;">
         <button class="notif-badge" type="button" onclick="toggleNotifPanel(event)" title="Alerts">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 4a4 4 0 0 0-4 4v1.3c0 .7-.2 1.4-.6 2L6 13v1h12v-1l-1.4-1.7a3.7 3.7 0 0 1-.6-2V8a4 4 0 0 0-4-4Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 17a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          @if(($lowStockAlertCount ?? 0) > 0)
-            <span class="nav-badge red">{{ $lowStockAlertCount }}</span>
-          @endif
+          <span class="nav-badge red" id="notif-count-badge" style="display:none;">0</span>
         </button>
         <div class="notif-panel" id="notif-panel">
-          @if(($lowStockAlertCount ?? 0) > 0)
-            @foreach(($lowStockAlerts ?? collect()) as $alert)
-              <div class="notif-item warn">
-                <span class="notif-icon">!</span>
-                <div class="notif-content">
-                  <strong>{{ $alert->item_name ?? 'Unnamed item' }}</strong>
-                  <div>Only {{ $alert->stock }} units left</div>
-                  <small>{{ $alert->sku ?: 'No SKU' }} · reorder at {{ $alert->reorder_threshold ?? 0 }}</small>
-                </div>
-              </div>
-            @endforeach
-          @else
-            <div class="notif-item ok">
-              <span class="notif-icon">✓</span>
-              <div class="notif-content">
-                <strong>No alerts</strong>
-                You have no new notifications right now.
-                <small>System · live</small>
-              </div>
+          <div class="notif-item ok">
+            <span class="notif-icon">✓</span>
+            <div class="notif-content">
+              <strong>No alerts</strong>
+              You have no new notifications right now.
+              <small>System · live</small>
             </div>
-          @endif
+          </div>
         </div>
       </div>
     </div>

@@ -100,9 +100,10 @@ class SupplierController extends Controller
             'phone' => 'nullable|string|max:30',
             'address' => 'nullable|string|max:255',
             'brand' => 'nullable|string|max:100',
+            'productsJson' => 'nullable|string',
         ]);
 
-        DB::table('suppliers')->where('id', $supplier)->update([
+        $update = [
             'name' => $validated['name'] ?? DB::raw('name'),
             'contact_person' => $validated['contact'] ?? DB::raw('contact_person'),
             'email' => $validated['email'] ?? DB::raw('email'),
@@ -110,7 +111,33 @@ class SupplierController extends Controller
             'address' => $validated['address'] ?? DB::raw('address'),
             'brand' => $validated['brand'] ?? DB::raw('brand'),
             'updated_at' => now(),
-        ]);
+        ];
+
+        // Persist edited products (name/price) — previously this method
+        // ignored productsJson entirely, so product/price edits from the
+        // supplier edit modal silently did nothing.
+        if ($request->has('productsJson')) {
+            $decoded = json_decode($request->input('productsJson'), true);
+            $products = is_array($decoded) ? $decoded : [];
+            $update['product_items'] = json_encode($products);
+
+            DB::table('supplier_products')->where('supplier_id', $supplier)->delete();
+            foreach ($products as $product) {
+                if (empty($product['name'])) {
+                    continue;
+                }
+                DB::table('supplier_products')->insert([
+                    'supplier_id' => $supplier,
+                    'name' => $product['name'],
+                    'sku' => $product['sku'] ?? null,
+                    'unit_price' => $product['price'] ?? 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        DB::table('suppliers')->where('id', $supplier)->update($update);
 
         return response()->json(['status' => 'ok']);
     }

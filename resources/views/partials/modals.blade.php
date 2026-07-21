@@ -76,7 +76,6 @@
     <div id="track-body"></div>
     <div class="modal-actions">
       <button class="btn btn-view" style="flex:1" onclick="closeTrackModal()">Close</button>
-      <button id="mark-received-btn" class="btn btn-approve" style="flex:1;display:none;" onclick="markReceived()">Mark Received</button>
       <button id="mark-completed-btn" class="btn btn-primary" style="flex:1;display:none;" onclick="markCompleted()">Mark Completed</button>
     </div>
   </div>
@@ -99,6 +98,9 @@
    
     <form id="add-po-form" onsubmit="submitAddPO(event)">
       <input type="hidden" name="reqRef" value="">
+      {{-- Priority is not chosen here — it's inherited from the linked
+           requisition so a PO always matches its requisition's priority. --}}
+      <input type="hidden" name="priority" value="Normal">
       <div class="form-grid">
         <div class="form-field">
           <label>PO Number <span class="req">*</span></label>

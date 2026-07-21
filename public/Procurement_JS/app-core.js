@@ -47,6 +47,21 @@
 
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"]+/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]||c)); }
 
+  /* ---------- Notification bell badge count ---------- */
+  async function refreshNotifCount(){
+    const badge = document.getElementById('notif-count-badge');
+    if(!badge) return;
+    try{
+      const res = await fetch('/notifications', { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
+      const json = await safeJson(res);
+      const count = (json && Array.isArray(json.purchaseOrders)) ? json.purchaseOrders.length : 0;
+      badge.textContent = count;
+      badge.style.display = count > 0 ? '' : 'none';
+    }catch(err){
+      // silent — keep last known state
+    }
+  }
+
   /* ---------- Live nav badge counts (Requests / PO / Logs) ---------- */
   async function pollNavCounts(){
     try{
@@ -65,7 +80,9 @@
   }
   document.addEventListener('DOMContentLoaded', () => {
     pollNavCounts();
+    refreshNotifCount();
     setInterval(pollNavCounts, 20000);
+    setInterval(refreshNotifCount, 20000);
   });
 
   document.addEventListener('click', (e)=>{

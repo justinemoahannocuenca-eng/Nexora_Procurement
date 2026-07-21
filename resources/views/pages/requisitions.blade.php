@@ -104,16 +104,16 @@
           </thead>
           <tbody>
             @forelse($requisitions as $req)
-              <tr data-id="{{ $req->id ?? '' }}" data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}" data-po="{{ isset($req->po_number) ? $req->po_number : '' }}" data-has-po="{{ isset($req->po_number) && $req->po_number ? '1' : '0' }}">
-                <td><a class="po-link">{{ $req->requisition_number }}</a></td>
-                <td>{{ $req->item }}</td>
-                <td>{{ $req->qty }}</td>
-                @php
+              @php
                   $priorityClass = strtolower($req->priority ?? 'normal');
                   if(!in_array($priorityClass, ['urgent','high','normal','low'])) {
                     $priorityClass = 'normal';
                   }
                 @endphp
+              <tr data-id="{{ $req->id ?? '' }}" data-status="{{ strtolower(str_replace(' ', '-', $req->status ?? 'Pending')) }}" data-priority="{{ $priorityClass }}" data-date="{{ $req->request_date }}" data-uom="{{ $req->uom ?? 'pcs' }}" data-notes="{{ $req->notes ?? '' }}" data-po="{{ isset($req->po_number) ? $req->po_number : '' }}" data-has-po="{{ isset($req->po_number) && $req->po_number ? '1' : '0' }}">
+                <td><a class="po-link">{{ $req->requisition_number }}</a></td>
+                <td>{{ $req->item }}</td>
+                <td>{{ $req->qty }}</td>
                 <td><span class="priority-pill {{ $priorityClass }}">{{ strtoupper($req->priority ?? 'NORMAL') }}</span></td>
                 <td>{{ $req->department }}</td>
                 <td>{{ $req->requested_by }}</td>

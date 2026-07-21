@@ -353,12 +353,21 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       setModalFieldValue(modal, 'expected', exp.toISOString().slice(0,10));
       refreshPoSupplierOptions(modal);
       
-      // Auto-fill from requisition data — only the Qty (and the reference
-      // number) should carry over. Item/Brand/Supplier are chosen by the
-      // person creating the PO, not copied from the request.
+      // Auto-fill from requisition data — Qty, the reference number, and
+      // the requested Priority carry over. Item/Brand/Supplier are chosen
+      // by the person creating the PO, not copied from the request.
+      // Always set reqRef/priority explicitly (both directions) so a PO
+      // created straight from this page doesn't inherit the leftover
+      // requisition reference/priority from a previous conversion —
+      // form.reset() can't clear these because their defaultValue gets
+      // mutated once a value is assigned.
       if(reqData){
-        if(reqData.reqNum) setModalFieldValue(modal, 'reqRef', reqData.reqNum);
+        setModalFieldValue(modal, 'reqRef', reqData.reqNum || '');
         if(reqData.qty) setModalFieldValue(modal, 'qty', reqData.qty);
+        setModalFieldValue(modal, 'priority', normalizePriorityLabel(reqData.priority));
+      } else {
+        setModalFieldValue(modal, 'reqRef', '');
+        setModalFieldValue(modal, 'priority', 'Normal');
       }
       setTimeout(() => {
         const poForm = modal.querySelector('#add-po-form');
@@ -413,9 +422,18 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     }
   }
 
-  // Convert Requisition to PO
-  function convertReqToPO(reqNum, item, qty){
-    const reqData = { reqNum, item, qty };
+  // Normalize any priority string (e.g. "URGENT", "high") to the Title-case
+  // label stored on the PO (Urgent / High / Normal / Low).
+  function normalizePriorityLabel(value){
+    const key = String(value || '').trim().toLowerCase();
+    const map = { urgent: 'Urgent', high: 'High', normal: 'Normal', low: 'Low' };
+    return map[key] || 'Normal';
+  }
+
+  // Convert Requisition to PO — carry the requisition's priority through so
+  // the new PO keeps the requested priority instead of defaulting to Normal.
+  function convertReqToPO(reqNum, item, qty, priority){
+    const reqData = { reqNum, item, qty, priority };
     openAddModal('po', reqData);
   }
 
@@ -426,7 +444,7 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
     if(!row) return;
     const record = buildRecord(row);
     if(record.type === 'req'){
-      convertReqToPO(record.ref, record.item, record.qty);
+      convertReqToPO(record.ref, record.item, record.qty, record.priority);
       closeViewModal();
     }
   }
@@ -451,15 +469,31 @@ const ID_COUNTS = { po: 419, req: 44, dr: 231 }; // Track highest used number pe
       if(!supplierProductDraft.length){
         list.innerHTML = '<div class="product-list-empty">No products added yet.</div>';
       } else {
+        // Editable rows: name and price are inline inputs so existing
+        // products can be renamed/repriced, not just added/removed.
         list.innerHTML = supplierProductDraft.map((item, idx) => `
-          <div class="product-chip">
-            <span>${htmlEscape(item.name || 'Unnamed product')}</span>
-            <span class="meta">${htmlEscape(item.sku || 'SKU pending')} · ₱${Number(item.price || 0).toFixed(2)}</span>
+          <div class="product-chip product-chip-edit">
+            <input type="text" class="product-chip-name" value="${htmlEscape(item.name || '')}" placeholder="Product name" oninput="updateSupplierProduct(${idx}, 'name', this.value)">
+            <span class="product-chip-sku">${htmlEscape(item.sku || 'SKU pending')}</span>
+            <span class="product-chip-price">₱<input type="number" min="0" step="0.01" class="product-chip-price-input" value="${Number(item.price || 0)}" placeholder="0.00" oninput="updateSupplierProduct(${idx}, 'price', this.value)"></span>
             <button type="button" class="remove" onclick="removeSupplierProduct(${idx})" title="Remove">×</button>
           </div>
         `).join('');
       }
     }
+    if(hidden){ hidden.value = JSON.stringify(supplierProductDraft); }
+  }
+
+  function updateSupplierProduct(index, field, value){
+    if(!supplierProductDraft[index]) return;
+    if(field === 'price'){
+      supplierProductDraft[index].price = Number(value || 0);
+    } else {
+      supplierProductDraft[index][field] = value;
+    }
+    // Update only the hidden JSON payload — don't re-render, or the input
+    // the user is typing into would lose focus on every keystroke.
+    const hidden = document.getElementById(supplierProductEditor.hiddenId);
     if(hidden){ hidden.value = JSON.stringify(supplierProductDraft); }
   }
 

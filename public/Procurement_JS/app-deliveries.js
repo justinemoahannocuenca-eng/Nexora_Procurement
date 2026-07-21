@@ -21,53 +21,16 @@
         <div class="detail-card"><h4>Tracking info</h4><div class="modal-row"><span>Date</span><span>${dateLabel}</span></div><div class="modal-row"><span>Carrier</span><span>${d.carrier || 'Assigned carrier'}</span></div><div class="modal-row"><span>Current stage</span><span>${Math.min(stage + 1, 5)} / 5</span></div><div class="modal-row"><span>Delivery note</span><span>${d.note || 'No additional note'}</span></div></div>
       </div>
     `;
-    const markReceivedBtn = document.getElementById('mark-received-btn');
+    // "Mark Received" was removed — a delivery is only marked "delivered" by
+    // the Inventory department on their side, not from here. Procurement can
+    // still close a delivered shipment out as completed.
     const markCompletedBtn = document.getElementById('mark-completed-btn');
-    if (currentStatus === 'delivered') {
-      markReceivedBtn.style.display = 'none';
-      markCompletedBtn.style.display = 'block';
-    } else if (currentStatus === 'intransit' || currentStatus === 'delayed') {
-      markReceivedBtn.style.display = 'block';
-      markCompletedBtn.style.display = 'none';
-    } else {
-      markReceivedBtn.style.display = 'none';
-      markCompletedBtn.style.display = 'none';
-    }
+    markCompletedBtn.style.display = (currentStatus === 'delivered') ? 'block' : 'none';
     document.getElementById('track-modal').__row = row;
     document.getElementById('track-modal').classList.add('open');
   }
   function closeTrackModal(){
     document.getElementById('track-modal').classList.remove('open');
-  }
-  function markReceived(){
-    const row = document.getElementById('track-modal').__row;
-    if(row){
-      row.dataset.status = 'delivered';
-      row.dataset.stage = '4';
-      row.children[5].innerHTML = statusPill('Delivered');
-      const poRow = findPoRowByNumber(row.dataset.po || '');
-      if(poRow){
-        poRow.dataset.status = 'processing';
-        poRow.children[6].innerHTML = statusPill('Processing');
-      }
-      // Persist delivery status to backend when possible
-      const delId = row.dataset.id;
-      if(delId){
-        fetch(`/deliveries/${delId}`, { method: 'PUT', headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-Requested-With':'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: new URLSearchParams({ status: 'delivered', remarks: row.dataset.note || '' }).toString() }).then(()=>{}).catch(()=>showToast('Unable to persist delivery status to server.', 'no'));
-      }
-      // Persist related PO status if present
-      const relatedPoRow = findPoRowByNumber(row.dataset.po || '');
-      if(relatedPoRow && relatedPoRow.dataset.id){
-        fetch(`/purchase-orders/${relatedPoRow.dataset.id}`, { method: 'PUT', headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-Requested-With':'XMLHttpRequest', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: new URLSearchParams({ status: 'processing' }).toString() }).then(()=>{}).catch(()=>{});
-      }
-      const reqRow = findReqRowByRef(row.dataset.po || '');
-      if(reqRow){
-        updateRequisitionStatus(row.dataset.po || '', 'Delivered');
-        persistRequisitionStatus(reqRow, 'Delivered');
-      }
-      showToast(`${row.dataset.ship} marked as received`, 'ok');
-    }
-    closeTrackModal();
   }
 
   function markCompleted(){

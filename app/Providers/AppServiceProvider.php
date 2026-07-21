@@ -22,57 +22,39 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         View::composer('partials.sidebar', function ($view): void {
-            $alerts = DB::connection('inventory')
-                ->table('stock_levels as sl')
-                ->join('items as i', 'sl.item_id', '=', 'i.id')
-                ->where('sl.stock', '<', 5)
-                ->orderBy('sl.stock', 'asc')
-                ->select('sl.stock', 'sl.reorder_threshold', 'i.name as item_name', 'i.sku')
-                ->limit(5)
-                ->get();
-
-            $requisitionCount = 0;
-            try {
-                $requisitionConnection = $this->resolveRequisitionConnection();
-                if ($requisitionConnection && $requisitionConnection->getSchemaBuilder()->hasTable('requisitions')) {
-                    if ($requisitionConnection->getSchemaBuilder()->hasColumn('requisitions', 'status')) {
-                        $requisitionCount = $requisitionConnection->table('requisitions')
-                            ->where(function ($query) {
-                                $query->where('status', 'Pending')
-                                    ->orWhere('status', 'pending');
-                            })
-                            ->count();
-                    } else {
-                        $requisitionCount = $requisitionConnection->table('requisitions')->count();
+            // A requisition is "Pending" only until a PO exists for it —
+            // same rule the /nav-counts endpoint and the Requisitions page
+            // use, so the initial server render matches the live JS poll
+            // instead of flashing an inflated all-requisitions count.
+            $allRefs = [];
+            $totalRequisitions = 0;
+            foreach (['orderfullfillment', 'manufacturing'] as $name) {
+                try {
+                    $connection = DB::connection($name);
+                    if (! $connection->getSchemaBuilder()->hasTable('requisitions')) {
+                        continue;
                     }
+                    $refCol = $name === 'orderfullfillment' ? 'req_number' : 'req_id';
+                    $refs = $connection->table('requisitions')->pluck($refCol)->filter()->all();
+                    $totalRequisitions += count($refs);
+                    $allRefs = array_merge($allRefs, $refs);
+                } catch (\Exception $e) {
+                    // ignore broken or unavailable external DB connections
                 }
-            } catch (\Exception $e) {
-                $requisitionCount = 0;
             }
+
+            $matchedRefs = empty($allRefs) ? 0 : DB::table('purchase_orders')
+                ->whereIn('requisition_reference', $allRefs)
+                ->distinct()
+                ->count('requisition_reference');
+            $requisitionCount = max(0, $totalRequisitions - $matchedRefs);
 
             $pendingPoCount = DB::table('purchase_orders')->where('status', 'pending')->count();
 
             $view->with([
-                'lowStockAlerts' => $alerts,
-                'lowStockAlertCount' => $alerts->count(),
                 'requisitionCount' => $requisitionCount,
                 'pendingPoCount' => $pendingPoCount,
             ]);
         });
-    }
-
-    private function resolveRequisitionConnection()
-    {
-        foreach (['orderfullfillment', 'manufacturing'] as $connection) {
-            try {
-                if (DB::connection($connection)->getSchemaBuilder()->hasTable('requisitions')) {
-                    return DB::connection($connection);
-                }
-            } catch (\Exception $e) {
-                // ignore broken or unavailable external DB connections
-            }
-        }
-
-        return DB::connection('manufacturing');
     }
 }
